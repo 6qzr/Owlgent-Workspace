@@ -12,7 +12,10 @@ CREATE TABLE IF NOT EXISTS slots (
     starts_at TIMESTAMPTZ NOT NULL,
     ends_at TIMESTAMPTZ NOT NULL,
 
-    CONSTRAINT valid_slot_time CHECK (ends_at > starts_at)
+    CONSTRAINT valid_slot_time CHECK (ends_at > starts_at),
+    -- prevent duplicate slots at the database level
+     CONSTRAINT unique_doctor_slot
+        UNIQUE (doctor_id, starts_at, ends_at)
 );
 
 
