@@ -21,13 +21,22 @@ jobs:
   review:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
+    env:
+      # Secrets cannot be used in `if:` directly; expose whether the key exists.
+      HAS_OPENAI_KEY: ${{ secrets.OPENAI_API_KEY != '' }}
     steps:
+      - name: Skip when the OPENAI_API_KEY secret is not configured
+        if: env.HAS_OPENAI_KEY != 'true'
+        run: echo "::notice::OPENAI_API_KEY secret not set; advisory AI review skipped."
+
       - name: Checkout code
+        if: env.HAS_OPENAI_KEY == 'true'
         uses: actions/checkout@v6
         with:
           persist-credentials: false
 
       - name: Review Pull Request with OpenCode
+        if: env.HAS_OPENAI_KEY == 'true'
         uses: anomalyco/opencode/github@latest
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
