@@ -244,6 +244,7 @@ dev = [
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "pytest-cov" },
+    { name = "python-dotenv" },
     { name = "ruff" },
 ]
 
@@ -266,6 +267,7 @@ dev = [
     { name = "pre-commit", specifier = ">=4.0" },
     { name = "pytest", specifier = ">=8.3" },
     { name = "pytest-cov", specifier = ">=6.0" },
+    { name = "python-dotenv", specifier = ">=1.2.4" },
     { name = "ruff", specifier = ">=0.8" },
 ]
 
