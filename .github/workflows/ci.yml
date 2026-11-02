@@ -1,0 +1,98 @@
+name: CI
+
+# Runs on every pull request and on main. The four job names below are the
+# required status checks in branch protection: lint, typecheck, test, compose-up.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      # --frozen: a forgotten uv.lock update fails the build instead of being silently fixed.
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+
+  typecheck:
+    name: typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run mypy
+
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    services:
+      # Same image as compose.yaml so CI, local and the VM run one PostgreSQL version.
+      postgres:
+        image: postgres:17.6
+        env:
+          POSTGRES_USER: clinic
+          POSTGRES_PASSWORD: clinic
+          POSTGRES_DB: clinic
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U clinic -d clinic"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://clinic:clinic@localhost:5432/clinic
+      # Tests use the fake LLM; no real key ever reaches CI.
+      OPENAI_API_KEY: ci-fake-key
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - name: Apply schema files from db/
+        run: |
+          shopt -s nullglob
+          for f in db/*.sql; do
+            echo "applying $f"
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"
+          done
+      - run: uv run pytest
+
+  compose-up:
+    name: compose-up
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Exactly what a fresh clone does: copy the example env, add a key, one command.
+      - name: Prepare .env
+        run: |
+          cp .env.example .env
+          sed -i 's/^OPENAI_API_KEY=.*/OPENAI_API_KEY=ci-fake-key/' .env
+      - name: Build and start the stack
+        run: docker compose up -d --build --wait --wait-timeout 180
+      - run: docker compose ps
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

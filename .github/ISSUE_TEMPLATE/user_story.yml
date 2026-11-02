@@ -1,0 +1,40 @@
+name: User story
+description: A story for the sprint backlog (needs acceptance criteria and points).
+title: "US-XX: "
+labels: ["story"]
+body:
+  - type: textarea
+    id: story
+    attributes:
+      label: Story
+      description: "As a <role>, I want <capability>, so that <benefit>."
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Testable statements; each becomes a test or a recorded request.
+      value: |
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+  - type: dropdown
+    id: points
+    attributes:
+      label: Story points (planning poker)
+      options: ["1", "2", "3", "5", "8"]
+    validations:
+      required: true
+  - type: textarea
+    id: tasks
+    attributes:
+      label: Tasks (1-3 h each, one owner)
+      description: Link task issues here as they are created.
+      value: |
+        - [ ]
+  - type: textarea
+    id: notes
+    attributes:
+      label: Dependencies, assumptions, notes

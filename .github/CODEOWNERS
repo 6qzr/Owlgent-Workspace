@@ -1,0 +1,42 @@
+# Each PR automatically requests review from the owners of the files it touches.
+# Later rules win. The team lead is on everything; each slice adds its owner.
+# Slices: see docs/architecture.md.
+
+*                                                 @6qzr
+
+# --- Agent core, platform (lead) ---
+/.github/                                         @6qzr
+/src/clinic_assistant/agent/                      @6qzr
+/src/clinic_assistant/llm/                        @6qzr
+
+# --- Conversations + ops (R1: checkpoints) ---
+/src/clinic_assistant/agent/checkpointer.py       @6qzr @MohammedAlkahali
+/src/clinic_assistant/services/conversation*.py   @6qzr @MohammedAlkahali
+/src/clinic_assistant/api/conversations.py        @6qzr @MohammedAlkahali
+/src/clinic_assistant/api/health.py               @6qzr @MohammedAlkahali
+/db/                                              @6qzr @MohammedAlkahali
+/compose*.yaml                                    @6qzr @MohammedAlkahali
+/Dockerfile                                       @6qzr @MohammedAlkahali
+
+# --- Approvals + slots (R2: human in the loop) ---
+/src/clinic_assistant/agent/nodes/await_staff.py  @6qzr @baraah34
+/src/clinic_assistant/agent/nodes/cancel.py       @6qzr @baraah34
+/src/clinic_assistant/agent/nodes/slots.py        @6qzr @baraah34
+/src/clinic_assistant/services/approval*.py       @6qzr @baraah34
+/src/clinic_assistant/repository/approvals.py     @6qzr @baraah34
+/src/clinic_assistant/api/approvals.py            @6qzr @baraah34
+/src/clinic_assistant/api/slots.py                @6qzr @baraah34
+
+# --- Knowledge + booking (R3: RAG) ---
+/src/clinic_assistant/kb/                         @6qzr @NoorAlbusaidi
+/src/clinic_assistant/agent/nodes/answer_docs.py  @6qzr @NoorAlbusaidi
+/src/clinic_assistant/agent/nodes/booking.py      @6qzr @NoorAlbusaidi
+/src/clinic_assistant/repository/bookings.py      @6qzr @NoorAlbusaidi
+
+# --- Research and experiments ---
+/docs/research/R1-*                               @6qzr @MohammedAlkahali
+/docs/research/R2-*                               @6qzr @baraah34
+/docs/research/R3-*                               @6qzr @NoorAlbusaidi
+/experiments/r1_*/                                @6qzr @MohammedAlkahali
+/experiments/r2_*/                                @6qzr @baraah34
+/experiments/r3_*/                                @6qzr @NoorAlbusaidi
