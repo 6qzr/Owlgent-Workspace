@@ -1,0 +1,73 @@
+[project]
+name = "clinic-assistant"
+version = "0.0.0"
+description = "Clinic Front-Desk Assistant: a REST API driven by LangGraph workflows."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "langgraph>=0.2",
+    "langgraph-checkpoint-postgres>=2.0",
+    "psycopg[binary,pool]>=3.2",
+    "openai>=1.55",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "httpx>=0.27",
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "pre-commit>=4.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/clinic_assistant"]
+
+# ---------------------------------------------------------------- ruff
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+src = ["src", "tests"]
+extend-exclude = ["experiments"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F",  # pycodestyle errors/warnings, pyflakes (unused names, undefined vars)
+    "I",            # import order
+    "B",            # bugbear: likely bugs (mutable defaults, bare except...)
+    "S",            # bandit security: hardcoded secrets, SQL built with strings, no timeouts
+    "UP",           # pyupgrade: modern Python 3.14 syntax
+    "SIM",          # simplifications
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]  # pytest uses bare assert
+
+[tool.ruff.format]
+quote-style = "double"
+
+# ---------------------------------------------------------------- mypy
+[tool.mypy]
+python_version = "3.14"
+strict = true
+mypy_path = "src"
+files = ["src", "tests"]
+exclude = ["experiments/"]
+
+# ---------------------------------------------------------------- pytest
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=clinic_assistant --cov-report=term-missing --cov-fail-under=80"
+markers = [
+    "integration: needs a running PostgreSQL (DATABASE_URL)",
+]

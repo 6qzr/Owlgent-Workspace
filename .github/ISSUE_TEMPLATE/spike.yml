@@ -1,0 +1,20 @@
+name: Research spike
+description: A 60-minute time-boxed research question (no story points).
+title: "Spike RX: "
+labels: ["spike"]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Question the spike must answer
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence expected in the final demo
+  - type: markdown
+    attributes:
+      value: |
+        **Timebox:** 60 minutes. **Outputs:** an experiment in `experiments/` (fake LLM only),
+        a one-page note in `docs/research/`, and an ADR in `docs/adr/` after the share-out.

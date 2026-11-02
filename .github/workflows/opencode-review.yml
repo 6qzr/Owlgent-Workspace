@@ -1,0 +1,65 @@
+name: opencode-review
+
+# Advisory AI review, adapted from the team repository (CodelineLegendsAIWorkflows).
+# Posts one review comment per PR. It never replaces the two human approvals and
+# is not a required check. Needs the OPENAI_API_KEY repository secret.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: opencode-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  review:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Review Pull Request with OpenCode
+        uses: anomalyco/opencode/github@latest
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          model: openai/gpt-4.1-mini
+          use_github_token: true
+          prompt: |
+            You are reviewing a pull request for the Clinic Front-Desk Assistant: a FastAPI
+            REST service driven by LangGraph workflows, backed by PostgreSQL (plain SQL via
+            psycopg, no ORM), tested with pytest and a deterministic fake LLM.
+
+            Repository conventions (read README.md "Contribution guidelines"); mention any
+            mismatch politely as a recommendation, not a blocker:
+            - Branch name: ${{ github.event.pull_request.head.ref }}. Expected
+              "feature/<issue-number>-<github-user>-<short-title>" (or fix/, chore/, docs/, release/).
+            - PR title: ${{ github.event.pull_request.title }}. Expected "#<issue-number>: <issue title>".
+            - Description: ${{ github.event.pull_request.body }}. It should link the issue
+              ("Closes #<n>") and reflect the changes actually made.
+
+            Always check:
+            - Logic errors, bugs and unhandled edge cases.
+            - Layering: no business logic in route functions; no vendor SDK calls inside graph
+              nodes; graph nodes return only the state keys they change.
+            - Safety: routing, emergency handling and approval decisions are plain code, never
+              decided by the LLM. Human approval must be a real LangGraph interrupt, not a flag.
+            - SQL: parameterised queries only; no string-formatted SQL; no ORM.
+            - External calls (LLM, database) have timeouts and clear error handling.
+            - Tests: new behaviour has tests that use the fake LLM.
+            - No secrets or generated files committed.
+            Formatting and types are enforced by ruff and mypy in CI; do not nitpick those.
+
+            How to respond: one heading "Code Review Comments", no sub-headings, highly
+            summarised, reference changed line numbers, explain the "why" briefly. If the PR
+            looks good, say so briefly.
