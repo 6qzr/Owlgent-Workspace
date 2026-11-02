@@ -16,32 +16,21 @@ decisions logged in #6. Each decision has an ADR in [`docs/adr/`](adr/).
 ## 1. System view
 
 ```mermaid
-flowchart LR
-    patient([Patient chat client])
-    staff([Front-desk staff])
-    openai[[OpenAI API]]
-
-    subgraph vm["Ubuntu Server VM: docker compose"]
-        subgraph api["api container: FastAPI"]
-            routes["api/ - routes only"]
-            services["services/ - conversation, approval"]
-            agent["agent/ - LangGraph graph"]
-            llm["llm/ - AsyncOpenAI or FakeLLM"]
-            kb["kb/ - document retriever"]
-            repo["repository/ - plain async SQL"]
-        end
-        db[("db container: PostgreSQL 17")]
+flowchart TB
+    patient([Patient]) -->|messages| routes
+    staff([Front-desk staff]) -->|approve / reject| routes
+    subgraph api["api container - FastAPI"]
+        routes["api/ - routes"] --> services["services/"]
+        services --> agent["agent/ - LangGraph"]
+        agent --> llm["llm/ - adapter"]
+        agent --> kb["kb/ - retriever"]
+        agent --> repo["repository/ - SQL"]
+        kb --> repo
+        services --> repo
     end
-
-    patient -->|messages| routes
-    staff -->|approve or reject| routes
-    routes --> services --> agent
-    agent --> llm --> openai
-    agent --> kb --> repo
-    agent --> repo
-    services --> repo
-    repo --> db
-    agent -.->|AsyncPostgresSaver| db
+    llm --> openai[[OpenAI API]]
+    repo --> db[("db container - PostgreSQL")]
+    agent -.->|checkpoints| db
 ```
 
 | Layer | Responsibility | Rule |
@@ -56,29 +45,35 @@ flowchart LR
 
 ## 2. Conversation workflow
 
+**2a. Routing.** Every message passes the safety rules first; plain code routes it after the LLM classifies it.
+
 ```mermaid
-flowchart TD
-    start([patient message]) --> safety{"safety_gate - rules, no LLM"}
-    safety -->|emergency| emergency["emergency_reply + staff flag"] --> done([END])
-    safety -->|ok| classify["classify - LLM: intent, confidence, entities"]
-    classify --> route{"route_intent - plain code"}
+flowchart TB
+    msg([patient message]) --> safety{"safety_gate<br/>rules, no LLM"}
+    safety -->|emergency| emer["emergency_reply<br/>+ staff flag"]
+    safety -->|ok| classify["classify<br/>LLM"]
+    classify --> route{"route_intent<br/>plain code"}
+    route -->|emergency| emer
+    route -->|unclear| clarify["clarify"]
+    route -->|question| rag["answer_from_docs"]
+    route -->|find_slots| slots["find_slots"]
+    route -->|other| scope["polite_scope_reply"]
+    route -->|book / cancel| approval(["booking and<br/>cancel path, 2b"])
+```
 
-    route -->|emergency| emergency
-    route -->|unclear or missing details| clarify["clarify - ask a question"] --> done
-    route -->|question| rag["answer_from_docs - cites source"] --> done
-    route -->|find_slots| slots["find_slots"] --> done
-    route -->|other| scope["polite_scope_reply - never diagnoses"] --> done
+**2b. Booking, cancel and staff approval.**
 
-    route -->|book| book["prepare_booking - holds the slot"]
-    book --> sameday{"same day?"}
-    sameday -->|no| confirm["confirm_booking"] --> done
-    sameday -->|yes| record
-
-    route -->|cancel| cancel["prepare_cancel - own booking only"] --> record
-
-    record["record_approval - writes approvals row"] --> wait["await_staff - interrupt()"]
-    wait -.->|"staff decision: Command(resume=...)"| apply["apply_decision"]
-    apply --> notify["notify_outcome"] --> done
+```mermaid
+flowchart TB
+    book["prepare_booking<br/>holds the slot"] --> same{"same day?"}
+    same -->|no| confirm["confirm_booking"]
+    same -->|yes| record
+    cancel["prepare_cancel<br/>own booking only"] --> record
+    record["record_approval<br/>writes approvals row"] --> wait["await_staff<br/>interrupt()"]
+    wait -.->|"staff decision<br/>Command(resume)"| apply["apply_decision"]
+    apply --> notify["notify_outcome"]
+    confirm --> done([END])
+    notify --> done
 ```
 
 `record_approval` is a separate node **before** `await_staff`. On resume, LangGraph re-runs the
