@@ -57,8 +57,9 @@ def test_lifespan_closes_runtime_on_shutdown() -> None:
     assert fake.closed
 
 
-def test_health_still_served_with_runtime() -> None:
+def test_health_is_served_with_runtime() -> None:
+    # FakeRuntime's pool is never opened, so /health reports the database as unreachable.
     with TestClient(create_app(FakeRuntime())) as client:
         response = client.get("/health")
 
-    assert response.status_code == 200
+    assert response.status_code == 503
