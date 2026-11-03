@@ -1,12 +1,19 @@
 """route_intent and clarify: low confidence or missing details ask a question, never guess."""
 
 import pytest
+from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.runnables import RunnableConfig
+from langgraph.checkpoint.memory import InMemorySaver
 
+from clinic_assistant.agent.graph import build_graph
+from clinic_assistant.agent.nodes import CLARIFYING, reply_kind
 from clinic_assistant.agent.nodes.clarify import REPHRASE, clarify
+from clinic_assistant.agent.nodes.classify import Classification
 from clinic_assistant.agent.prompts import ROUTING_CONFIDENCE_THRESHOLD
 from clinic_assistant.agent.routing import missing_details, route_intent
 from clinic_assistant.agent.state import ConversationState, Entities
 from clinic_assistant.domain import Intent
+from clinic_assistant.llm import FakeLLM
 
 COMPLETE: dict[Intent, Entities] = {
     Intent.QUESTION: {},
@@ -94,3 +101,34 @@ async def test_clarify_asks_to_rephrase_when_nothing_specific_is_missing() -> No
 
     assert update["reply"] == REPHRASE
     assert update["messages"][0].content == REPHRASE
+
+
+@pytest.mark.parametrize(
+    "s",
+    [
+        state(Intent.BOOK, entities={}),  # specific question
+        state(Intent.QUESTION, confidence=0.2),  # rephrase request
+    ],
+)
+async def test_every_clarify_reply_is_marked_clarifying(s: ConversationState) -> None:
+    update = await clarify(s)
+
+    assert reply_kind(update["messages"][0]) == CLARIFYING
+
+
+async def test_two_clarifying_turns_in_a_row_are_both_marked() -> None:
+    llm = FakeLLM(
+        [
+            Classification(intent=Intent.BOOK, confidence=0.9),
+            Classification(intent=Intent.BOOK, confidence=0.9, specialty="Dentistry"),
+        ]
+    )
+    graph = build_graph(llm, checkpointer=InMemorySaver())
+    config: RunnableConfig = {"configurable": {"thread_id": "clarify-twice"}}
+
+    await graph.ainvoke({"messages": [HumanMessage("I want to book")]}, config)
+    result = await graph.ainvoke({"messages": [HumanMessage("A dentist")]}, config)
+
+    replies = [m for m in result["messages"] if isinstance(m, AIMessage)]
+    assert [reply_kind(m) for m in replies] == [CLARIFYING, CLARIFYING]
+    assert replies[-1].text == "To book, please tell me the day."
