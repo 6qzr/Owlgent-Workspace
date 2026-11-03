@@ -15,6 +15,7 @@ from clinic_assistant.llm import LLM
 from clinic_assistant.llm.factory import create_llm
 from clinic_assistant.repository.approvals import ApprovalsRepository
 from clinic_assistant.repository.db import DictPool, create_pool
+from clinic_assistant.repository.emergencies import EmergencyFlagsRepository
 from clinic_assistant.repository.slots import SlotsRepository
 
 APP_TITLE = "Clinic Front-Desk Assistant"
@@ -40,7 +41,9 @@ async def postgres_runtime(settings: Settings, llm: LLM) -> AsyncIterator[Runtim
     try:
         checkpointer = await open_checkpointer(pool)
         repositories = Repositories(
-            approvals=ApprovalsRepository(pool), slots=SlotsRepository(pool)
+            approvals=ApprovalsRepository(pool),
+            slots=SlotsRepository(pool),
+            emergencies=EmergencyFlagsRepository(pool),
         )
         yield Runtime(graph=build_graph(llm, checkpointer, repositories), pool=pool)
     finally:

@@ -68,7 +68,7 @@ async def test_safety_gate_flags_an_emergency() -> None:
 
 
 async def test_emergency_reply_gives_the_fixed_instruction() -> None:
-    update = await emergency_reply({"messages": []})
+    update = await emergency_reply({"messages": []}, {"configurable": {}})
 
     assert update["reply"] == EMERGENCY_INSTRUCTION
     assert "diagnos" not in EMERGENCY_INSTRUCTION.lower()

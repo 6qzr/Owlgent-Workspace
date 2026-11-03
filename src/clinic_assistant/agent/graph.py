@@ -28,6 +28,7 @@ from clinic_assistant.agent.routing import route_after_booking, route_after_safe
 from clinic_assistant.agent.state import ConversationState
 from clinic_assistant.llm import LLM
 from clinic_assistant.repository.approvals import ApprovalsRepository
+from clinic_assistant.repository.emergencies import EmergencyFlagsRepository
 from clinic_assistant.repository.slots import SlotsRepository
 
 type ConversationGraph = CompiledStateGraph[
@@ -47,6 +48,7 @@ class Repositories:
 
     approvals: ApprovalsRepository | None = None
     slots: SlotsRepository | None = None
+    emergencies: EmergencyFlagsRepository | None = None
 
 
 def with_configurable(node: ConfigNode, values: dict[str, Any]) -> ConfigNode:
@@ -88,9 +90,14 @@ def build_graph(
     async def classify_with_llm(state: ConversationState) -> Update:
         return await classify(state, llm)
 
+    async def emergency_reply_with_flags(
+        state: ConversationState, config: RunnableConfig
+    ) -> Update:
+        return await emergency_reply(state, config, repos.emergencies)
+
     builder = StateGraph(ConversationState)
     builder.add_node("safety_gate", safety_gate)
-    builder.add_node("emergency_reply", emergency_reply)
+    builder.add_node("emergency_reply", emergency_reply_with_flags)
     builder.add_node("classify", classify_with_llm)
     builder.add_node("clarify", clarify)
     builder.add_node("answer_from_docs", answer_from_docs)

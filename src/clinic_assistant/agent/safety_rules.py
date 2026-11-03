@@ -41,8 +41,11 @@ EMERGENCY_PHRASES: tuple[str, ...] = (
 
 EMERGENCY_INSTRUCTION = (
     "This sounds like it could be an emergency. Please call 9999 now or go to the nearest "
-    "emergency department. Front-desk staff have been alerted to your message."
+    "emergency department."
 )
+# Added only after the staff flag is actually stored, so the reply never promises an alert
+# that did not happen.
+STAFF_ALERTED = " Front-desk staff have been alerted to your message."
 
 _PATTERN = re.compile(
     r"\b(?:" + "|".join(re.escape(p).replace(r"\ ", r"\s+") for p in EMERGENCY_PHRASES) + r")\b"
