@@ -13,12 +13,6 @@ uv run pytest
 ```
 <!-- Add the requests a reviewer can run, e.g. curl / OpenAPI steps. -->
 
-## AI use and understanding
-<!-- See docs/ai-workflow.md. -->
-- **Tool and what I used it for:**
-- **How it works, in my own words** (state fields read/written, DB rows changed):
-- **What I checked myself** (tests predicted and run, line broken on purpose):
-
 ## Checklist
 - [ ] `uv run ruff check .` and `uv run ruff format --check .` pass
 - [ ] `uv run mypy` passes
