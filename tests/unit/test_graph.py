@@ -10,7 +10,6 @@ from clinic_assistant.agent.routing import (
     INTENT_TO_NODE,
     route_after_booking,
     route_after_safety,
-    route_intent,
 )
 from clinic_assistant.agent.state import ConversationState, PendingAction
 from clinic_assistant.domain import ApprovalAction, Intent
@@ -65,13 +64,8 @@ def test_non_emergency_goes_to_classify() -> None:
 
 
 def test_every_intent_has_a_route() -> None:
+    """Branch-by-branch routing is covered in test_route_intent.py."""
     assert set(INTENT_TO_NODE) == set(Intent)
-    for intent, node in INTENT_TO_NODE.items():
-        assert route_intent({"messages": [], "intent": intent}) == node
-
-
-def test_missing_intent_asks_for_clarification() -> None:
-    assert route_intent({"messages": []}) == "clarify"
 
 
 def test_same_day_booking_waits_for_staff() -> None:
