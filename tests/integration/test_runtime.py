@@ -16,6 +16,7 @@ async def test_postgres_runtime_builds_checkpointed_graph(settings: Settings) ->
 
         assert isinstance(checkpointer, AsyncPostgresSaver)
         assert not checkpointer.conn.closed
+        assert runtime.pool is checkpointer.conn  # services share the checkpointer's pool
 
 
 async def test_postgres_runtime_closes_pool(settings: Settings) -> None:
