@@ -11,11 +11,14 @@ dist/
 .mypy_cache/
 .pytest_cache/
 .coverage
+.coverage.*
 coverage.xml
 htmlcov/
 
 # Secrets and local data: never commit
 .env
+.env.*
+!.env.example
 *.dump
 *.sql.gz
 
