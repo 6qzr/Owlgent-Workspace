@@ -5,11 +5,11 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import InMemorySaver
 
 from clinic_assistant.agent.graph import build_graph
+from clinic_assistant.agent.nodes.classify import Classification
 from clinic_assistant.agent.routing import (
     INTENT_TO_NODE,
     route_after_booking,
     route_after_safety,
-    route_intent,
 )
 from clinic_assistant.agent.state import ConversationState, PendingAction
 from clinic_assistant.domain import ApprovalAction, Intent
@@ -40,7 +40,8 @@ def test_graph_has_every_node_from_the_architecture() -> None:
 
 
 async def test_message_runs_end_to_end_and_is_checkpointed() -> None:
-    graph = build_graph(FakeLLM(), checkpointer=InMemorySaver())
+    llm = FakeLLM([Classification(intent=Intent.OTHER, confidence=0.9)])
+    graph = build_graph(llm, checkpointer=InMemorySaver())
     config: RunnableConfig = {"configurable": {"thread_id": "conversation-1"}}
 
     result = await graph.ainvoke({"messages": [HumanMessage("Hello")]}, config)
@@ -63,13 +64,8 @@ def test_non_emergency_goes_to_classify() -> None:
 
 
 def test_every_intent_has_a_route() -> None:
+    """Branch-by-branch routing is covered in test_route_intent.py."""
     assert set(INTENT_TO_NODE) == set(Intent)
-    for intent, node in INTENT_TO_NODE.items():
-        assert route_intent({"messages": [], "intent": intent}) == node
-
-
-def test_missing_intent_asks_for_clarification() -> None:
-    assert route_intent({"messages": []}) == "clarify"
 
 
 def test_same_day_booking_waits_for_staff() -> None:
