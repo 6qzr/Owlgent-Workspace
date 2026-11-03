@@ -1,4 +1,3 @@
-
 """Find available appointment slots from PostgreSQL."""
 
 from datetime import date
