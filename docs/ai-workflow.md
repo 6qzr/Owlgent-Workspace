@@ -8,7 +8,7 @@ How the team uses Claude Code, OpenCode or similar tools to finish the remaining
 2. **Generate one small step.** One function or one test at a time. Keep the PR under ~400 lines.
 3. **Explain it back.** For each function, ask the tool *why*, not *what*: why this order, why this SQL, what happens on failure. Then say it in your own words. If you can't, don't merge it.
 4. **Predict, then test.** Before running `uv run pytest`, write down which tests you expect to pass or fail. Then break one line on purpose and check that a test catches it.
-5. **Write the PR yourself.** Fill in the *AI use and understanding* section of the PR template in your own words.
+5. **Fill in the PR.** Complete the *AI use and understanding* section of the PR template.
 
 ## Prompts that help you understand
 
