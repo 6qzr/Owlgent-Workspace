@@ -1,4 +1,3 @@
-
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -29,8 +28,10 @@ class Settings(BaseSettings):
     # Conversation history
     max_history_messages: int = Field(default=20, gt=0)
 
+
 # to solve a Mypy type-checking issue
 def get_settings() -> Settings:
     return Settings()  # type: ignore[call-arg]
+
 
 settings = get_settings()
