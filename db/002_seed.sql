@@ -21,7 +21,7 @@ WITH days AS (
     SELECT
         (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Muscat')::date + day_offset
         AS appointment_date
-    FROM generate_series(1, 5) AS day_offset
+    FROM generate_series(0, 4) AS day_offset
 ),
 
 appointment_times AS (

@@ -1,3 +1,5 @@
+from functools import lru_cache
+
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -30,8 +32,7 @@ class Settings(BaseSettings):
 
 
 # to solve a Mypy type-checking issue
+@lru_cache
 def get_settings() -> Settings:
+    """Return cached application settings."""
     return Settings()  # type: ignore[call-arg]
-
-
-settings = get_settings()

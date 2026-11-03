@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS bookings (
         ))
 );
 -- Why do we add it after creating the table? Because an index operates on an existing table.
-CREATE UNIQUE INDEX unique_active_booking_per_slot
+CREATE UNIQUE INDEX IF NOT EXISTS unique_active_booking_per_slot
 ON bookings (slot_id)
 WHERE status IN ('pending_approval', 'confirmed');
 
@@ -97,5 +97,7 @@ CREATE TABLE IF NOT EXISTS doc_chunks (
 );
 
 -- Speed up full-text searches
-CREATE INDEX idx_doc_chunks_search
+-- If the index doesn't exist, create it.
+-- If it already exists, skip creating it.
+CREATE INDEX IF NOT EXISTS idx_doc_chunks_search
 ON doc_chunks USING GIN (search_vector);
