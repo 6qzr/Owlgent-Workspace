@@ -4,13 +4,14 @@ from datetime import date
 from typing import Any
 
 from psycopg.rows import dict_row
-from psycopg_pool import AsyncConnectionPool
+
+from clinic_assistant.repository.db import DictPool
 
 
 class SlotsRepository:
     """Find free appointment slots using PostgreSQL."""
 
-    def __init__(self, pool: AsyncConnectionPool) -> None:
+    def __init__(self, pool: DictPool) -> None:
         # Use the shared database connection pool.
         self.pool = pool
 

@@ -1,6 +1,6 @@
 """API endpoints for staff approvals."""
 
-from typing import Annotated, Any, Literal, cast
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from clinic_assistant.repository.approvals import (
     ApprovalAlreadyDecidedError,
     ApprovalNotFoundError,
+    ApprovalsRepository,
 )
 from clinic_assistant.services.approval import (
     ApprovalResumeError,
@@ -29,21 +30,17 @@ class DecisionRequest(BaseModel):
 
 
 def get_approval_service(request: Request) -> ApprovalService:
-    """Get the approval service created at app startup."""
+    """Build the approval service from the runtime opened at start-up (like the conversations)."""
 
-    service = getattr(
-        request.app.state,
-        "approval_service",
-        None,
-    )
+    runtime = getattr(request.app.state, "runtime", None)
 
-    if service is None:
+    if runtime is None:
         raise HTTPException(
             status_code=503,
             detail="Approval service is not available",
         )
 
-    return cast(ApprovalService, service)
+    return ApprovalService(ApprovalsRepository(runtime.pool), runtime.graph)
 
 
 @router.get("")

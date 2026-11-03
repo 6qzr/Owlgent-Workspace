@@ -4,9 +4,9 @@ from typing import Any
 from uuid import UUID
 
 from psycopg.rows import dict_row
-from psycopg_pool import AsyncConnectionPool
 
 from clinic_assistant.domain import ApprovalAction, ApprovalStatus
+from clinic_assistant.repository.db import DictPool
 
 
 class ApprovalNotFoundError(Exception):
@@ -20,7 +20,7 @@ class ApprovalAlreadyDecidedError(Exception):
 class ApprovalsRepository:
     """Manage staff approval requests in PostgreSQL."""
 
-    def __init__(self, pool: AsyncConnectionPool) -> None:
+    def __init__(self, pool: DictPool) -> None:
         # Save the database connection pool.
         self.pool = pool
 
