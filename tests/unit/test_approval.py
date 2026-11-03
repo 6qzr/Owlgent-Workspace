@@ -1,5 +1,6 @@
 """Test approval nodes without a database."""
-
+from langchain_core.runnables import RunnableConfig
+from clinic_assistant.agent.state import ConversationState
 import pytest
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
