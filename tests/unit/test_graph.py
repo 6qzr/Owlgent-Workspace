@@ -5,6 +5,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import InMemorySaver
 
 from clinic_assistant.agent.graph import build_graph
+from clinic_assistant.agent.nodes.classify import Classification
 from clinic_assistant.agent.routing import (
     INTENT_TO_NODE,
     route_after_booking,
@@ -40,7 +41,8 @@ def test_graph_has_every_node_from_the_architecture() -> None:
 
 
 async def test_message_runs_end_to_end_and_is_checkpointed() -> None:
-    graph = build_graph(FakeLLM(), checkpointer=InMemorySaver())
+    llm = FakeLLM([Classification(intent=Intent.OTHER, confidence=0.9)])
+    graph = build_graph(llm, checkpointer=InMemorySaver())
     config: RunnableConfig = {"configurable": {"thread_id": "conversation-1"}}
 
     result = await graph.ainvoke({"messages": [HumanMessage("Hello")]}, config)
