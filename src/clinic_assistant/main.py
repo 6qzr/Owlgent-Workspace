@@ -8,11 +8,12 @@ from fastapi import FastAPI
 
 from clinic_assistant import __version__
 from clinic_assistant.agent.checkpointer import open_checkpointer
-from clinic_assistant.agent.graph import ConversationGraph, build_graph
-from clinic_assistant.api import conversations, health
+from clinic_assistant.agent.graph import ConversationGraph, Repositories, build_graph
+from clinic_assistant.api import approvals, conversations, health
 from clinic_assistant.config import Settings, get_settings
 from clinic_assistant.llm import LLM
 from clinic_assistant.llm.factory import create_llm
+from clinic_assistant.repository.approvals import ApprovalsRepository
 from clinic_assistant.repository.db import DictPool, create_pool
 
 APP_TITLE = "Clinic Front-Desk Assistant"
@@ -37,7 +38,8 @@ async def postgres_runtime(settings: Settings, llm: LLM) -> AsyncIterator[Runtim
     await pool.open(wait=True, timeout=POOL_OPEN_TIMEOUT_SECONDS)
     try:
         checkpointer = await open_checkpointer(pool)
-        yield Runtime(graph=build_graph(llm, checkpointer), pool=pool)
+        repositories = Repositories(approvals=ApprovalsRepository(pool))
+        yield Runtime(graph=build_graph(llm, checkpointer, repositories), pool=pool)
     finally:
         await pool.close()
 
@@ -63,6 +65,7 @@ def create_app(runtime: RuntimeFactory = default_runtime) -> FastAPI:
     app = FastAPI(title=APP_TITLE, version=__version__, lifespan=lifespan)
     app.include_router(health.router)
     app.include_router(conversations.router)
+    app.include_router(approvals.router)
     return app
 
 
