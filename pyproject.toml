@@ -25,6 +25,7 @@ dev = [
     "mypy>=1.13",
     "pre-commit>=4.0",
     "python-dotenv>=1.2.4",
+    "pytest-asyncio>=1.4.1.post1",
 ]
 
 [build-system]
@@ -68,6 +69,8 @@ exclude = ["experiments/"]
 # ---------------------------------------------------------------- pytest
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"  # async def tests run without a decorator (ADR 0007)
+asyncio_default_fixture_loop_scope = "function"
 addopts = "--cov=clinic_assistant --cov-report=term-missing --cov-fail-under=80"
 markers = [
     "integration: needs a running PostgreSQL (DATABASE_URL)",
