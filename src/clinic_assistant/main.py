@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from clinic_assistant import __version__
 from clinic_assistant.agent.checkpointer import open_checkpointer
 from clinic_assistant.agent.graph import ConversationGraph, Repositories, build_graph
-from clinic_assistant.api import approvals, conversations, health, slots
+from clinic_assistant.api import approvals, conversations, emergencies, health, slots
 from clinic_assistant.config import Settings, get_settings
 from clinic_assistant.llm import LLM
 from clinic_assistant.llm.factory import create_llm
@@ -73,6 +73,7 @@ def create_app(runtime: RuntimeFactory = default_runtime) -> FastAPI:
     app.include_router(conversations.router)
     app.include_router(approvals.router)
     app.include_router(slots.router)
+    app.include_router(emergencies.router)
     return app
 
 
