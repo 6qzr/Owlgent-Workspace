@@ -1,6 +1,7 @@
 from functools import lru_cache
+from typing import Literal, Self
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,8 +12,9 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # OpenAI
-    openai_api_key: SecretStr
+    # LLM: "fake" runs the whole stack without an OpenAI key (rule-based DemoLLM).
+    llm_provider: Literal["openai", "fake"] = "openai"
+    openai_api_key: SecretStr | None = None
     openai_model: str = "gpt-4.1-mini"
     llm_timeout_seconds: int = Field(default=20, gt=0)
 
@@ -29,6 +31,14 @@ class Settings(BaseSettings):
 
     # Conversation history
     max_history_messages: int = Field(default=20, gt=0)
+
+    @model_validator(mode="after")
+    def require_key_for_openai(self) -> Self:
+        """Fail fast at start-up when the real model is selected without a key."""
+        key = self.openai_api_key.get_secret_value().strip() if self.openai_api_key else ""
+        if self.llm_provider == "openai" and not key:
+            raise ValueError("OPENAI_API_KEY is required when LLM_PROVIDER=openai")
+        return self
 
 
 # to solve a Mypy type-checking issue
