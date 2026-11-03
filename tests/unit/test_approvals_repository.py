@@ -1,4 +1,3 @@
-
 """Test approvals repository without PostgreSQL."""
 
 from unittest.mock import AsyncMock, MagicMock
@@ -25,15 +24,11 @@ def make_repository() -> tuple[ApprovalsRepository, MagicMock]:
 
     # Fake database connection.
     connection = MagicMock()
-    connection.cursor.return_value.__aenter__ = AsyncMock(
-        return_value=cursor
-    )
+    connection.cursor.return_value.__aenter__ = AsyncMock(return_value=cursor)
 
     # Fake connection pool.
     pool = MagicMock()
-    pool.connection.return_value.__aenter__ = AsyncMock(
-        return_value=connection
-    )
+    pool.connection.return_value.__aenter__ = AsyncMock(return_value=connection)
 
     return ApprovalsRepository(pool), cursor
 
@@ -209,15 +204,9 @@ async def test_staff_decision(
     assert cursor.execute.await_count == expected_queries
 
     # Check which SQL updates were executed.
-    executed_sql = [
-        call.args[0]
-        for call in cursor.execute.await_args_list
-    ]
+    executed_sql = [call.args[0] for call in cursor.execute.await_args_list]
 
-    booking_updates = [
-        sql for sql in executed_sql
-        if "UPDATE bookings" in sql
-    ]
+    booking_updates = [sql for sql in executed_sql if "UPDATE bookings" in sql]
 
     if expected_booking is None:
         # Rejected cancellation must not change the booking.
