@@ -4,8 +4,15 @@ import asyncio
 from collections.abc import AsyncIterator, Mapping
 
 import pytest
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from langgraph.graph import END, START, StateGraph
+from langgraph.types import interrupt
 from pytest_asyncio.plugin import LoopFactory
 
+from clinic_assistant.agent.checkpointer import open_checkpointer
+from clinic_assistant.agent.graph import ConversationGraph
+from clinic_assistant.agent.nodes import Update
+from clinic_assistant.agent.state import ConversationState
 from clinic_assistant.config import Settings, get_settings
 from clinic_assistant.repository.db import DictPool, create_pool
 
@@ -34,3 +41,24 @@ async def pool(settings: Settings) -> AsyncIterator[DictPool]:
         yield db_pool
     finally:
         await db_pool.close()
+
+
+@pytest.fixture
+async def saver(pool: DictPool) -> AsyncPostgresSaver:
+    """The real checkpointer on the test pool."""
+    return await open_checkpointer(pool)
+
+
+@pytest.fixture
+def paused_graph(saver: AsyncPostgresSaver) -> ConversationGraph:
+    """A tiny graph that always stops at await_staff, like the approval branch."""
+
+    async def await_staff(state: ConversationState) -> Update:
+        interrupt({"approval_id": 1})
+        return {}
+
+    builder = StateGraph(ConversationState)
+    builder.add_node("await_staff", await_staff)
+    builder.add_edge(START, "await_staff")
+    builder.add_edge("await_staff", END)
+    return builder.compile(checkpointer=saver)

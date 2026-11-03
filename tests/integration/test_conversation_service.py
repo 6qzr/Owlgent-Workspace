@@ -4,14 +4,9 @@ from uuid import uuid4
 
 import pytest
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-from langgraph.graph import END, START, StateGraph
-from langgraph.types import interrupt
 
-from clinic_assistant.agent.checkpointer import open_checkpointer
 from clinic_assistant.agent.graph import ConversationGraph, build_graph
-from clinic_assistant.agent.nodes import Update
 from clinic_assistant.agent.nodes.classify import Classification
-from clinic_assistant.agent.state import ConversationState
 from clinic_assistant.config import Settings
 from clinic_assistant.domain import Intent
 from clinic_assistant.llm import FakeLLM, LLMError
@@ -29,24 +24,6 @@ from clinic_assistant.services.conversation import (
 pytestmark = pytest.mark.integration
 
 OTHER = Classification(intent=Intent.OTHER, confidence=0.9)
-
-
-@pytest.fixture
-async def saver(pool: DictPool) -> AsyncPostgresSaver:
-    return await open_checkpointer(pool)
-
-
-# A tiny graph that always stops at await_staff, like the approval branch.
-def paused_graph(saver: AsyncPostgresSaver) -> ConversationGraph:
-    async def await_staff(state: ConversationState) -> Update:
-        interrupt({"approval_id": 1})
-        return {}
-
-    builder = StateGraph(ConversationState)
-    builder.add_node("await_staff", await_staff)
-    builder.add_edge(START, "await_staff")
-    builder.add_edge("await_staff", END)
-    return builder.compile(checkpointer=saver)
 
 
 async def test_created_conversation_is_stored_and_empty(
@@ -87,9 +64,9 @@ async def test_history_grows_across_turns(pool: DictPool, saver: AsyncPostgresSa
 
 
 async def test_paused_conversation_refuses_new_messages(
-    pool: DictPool, saver: AsyncPostgresSaver
+    pool: DictPool, paused_graph: ConversationGraph
 ) -> None:
-    service = ConversationService(paused_graph(saver), pool)
+    service = ConversationService(paused_graph, pool)
     conversation_id = await service.create_conversation()
 
     result = await service.send_message(conversation_id, "Cancel booking 7")
