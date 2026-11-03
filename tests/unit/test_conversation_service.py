@@ -5,6 +5,7 @@ from typing import Any
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
+from clinic_assistant.agent.nodes import CLARIFYING, reply_update
 from clinic_assistant.domain import Intent
 from clinic_assistant.services.conversation import (
     HistoryMessage,
@@ -71,3 +72,28 @@ def test_history_labels_patient_and_assistant() -> None:
         HistoryMessage(role="patient", content="What are your hours?"),
         HistoryMessage(role="assistant", content="8 to 4."),
     ]
+
+
+def test_clarifying_reply_gives_clarifying_status() -> None:
+    question = reply_update("To book, please tell me the day.", kind=CLARIFYING)["messages"][0]
+    after = {"messages": [HumanMessage("I want to book"), question]}
+
+    result = turn_result(before={}, after=after, paused=False)
+
+    assert result.status is TurnStatus.CLARIFYING
+    assert result.reply == "To book, please tell me the day."
+
+
+def test_emergency_outranks_a_clarifying_reply() -> None:
+    question = reply_update("Which day?", kind=CLARIFYING)["messages"][0]
+    after = {"messages": [HumanMessage("chest pain"), question], "emergency": True}
+
+    assert turn_result(before={}, after=after, paused=False).status is TurnStatus.EMERGENCY
+
+
+def test_clarifying_from_an_earlier_turn_does_not_leak() -> None:
+    question = reply_update("Which day?", kind=CLARIFYING)["messages"][0]
+    before = {"messages": [HumanMessage("I want to book"), question]}
+    after = {"messages": [*before["messages"], HumanMessage("Hi"), AIMessage("Hello!")]}
+
+    assert turn_result(before=before, after=after, paused=False).status is TurnStatus.ANSWERED

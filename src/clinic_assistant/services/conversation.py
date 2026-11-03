@@ -13,10 +13,11 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import psycopg
-from langchain_core.messages import AIMessage, AnyMessage, HumanMessage
+from langchain_core.messages import AIMessage, AnyMessage, BaseMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 
 from clinic_assistant.agent.graph import ConversationGraph
+from clinic_assistant.agent.nodes import CLARIFYING, reply_kind
 from clinic_assistant.domain import Intent
 from clinic_assistant.llm import LLMError
 from clinic_assistant.repository import conversations
@@ -40,9 +41,10 @@ class DatabaseUnavailable(Exception):
 
 
 class TurnStatus(StrEnum):
-    """Outcome of a turn (docs/architecture.md §4); `clarifying` waits for a state marker."""
+    """Outcome of a turn (docs/architecture.md §4)."""
 
     ANSWERED = "answered"
+    CLARIFYING = "clarifying"
     AWAITING_APPROVAL = "awaiting_approval"
     EMERGENCY = "emergency"
 
@@ -78,12 +80,19 @@ def thread_config(conversation_id: UUID) -> RunnableConfig:
     return {"configurable": {"thread_id": str(conversation_id)}}
 
 
-def turn_status(state: Mapping[str, Any], paused: bool) -> TurnStatus:
-    """Derive the status from the state after a turn and whether the graph is paused."""
+def turn_status(
+    state: Mapping[str, Any], paused: bool, reply: BaseMessage | None = None
+) -> TurnStatus:
+    """Derive the status from the state, the pause, and the kind marked on this turn's reply.
+
+    Order matters: a pause or an emergency outranks a clarifying question.
+    """
     if paused:
         return TurnStatus.AWAITING_APPROVAL
     if state.get("emergency") or state.get("intent") == Intent.EMERGENCY:
         return TurnStatus.EMERGENCY
+    if reply is not None and reply_kind(reply) == CLARIFYING:
+        return TurnStatus.CLARIFYING
     return TurnStatus.ANSWERED
 
 
@@ -93,17 +102,28 @@ def changed[T](before: Mapping[str, Any], after: Mapping[str, Any], key: str, em
     return empty if value == before.get(key, empty) else value
 
 
+def new_reply_message(before: Mapping[str, Any], after: Mapping[str, Any]) -> AIMessage | None:
+    """The last assistant message added during this turn, if any."""
+    added = after.get("messages", [])[len(before.get("messages", [])) :]
+    replies = [message for message in added if isinstance(message, AIMessage)]
+    return replies[-1] if replies else None
+
+
 def new_reply(before: Mapping[str, Any], after: Mapping[str, Any]) -> str | None:
     """Text of the last assistant message added during this turn, if any."""
-    added = after.get("messages", [])[len(before.get("messages", [])) :]
-    replies = [message.text for message in added if isinstance(message, AIMessage)]
-    return replies[-1] if replies else None
+    message = new_reply_message(before, after)
+    return message.text if message is not None else None
+
+
+def last_reply_message(messages: Sequence[AnyMessage]) -> AIMessage | None:
+    """The newest assistant message in a stored history, if any."""
+    return next((m for m in reversed(messages) if isinstance(m, AIMessage)), None)
 
 
 def turn_result(before: Mapping[str, Any], after: Mapping[str, Any], paused: bool) -> TurnResult:
     """Build the turn result from the state diff, so stale fields never leak."""
     return TurnResult(
-        status=turn_status(after, paused),
+        status=turn_status(after, paused, new_reply_message(before, after)),
         reply=new_reply(before, after),
         sources=changed(before, after, "sources", []),
         approval_id=changed(before, after, "approval_id", None),
@@ -164,9 +184,10 @@ class ConversationService:
         async with database_errors("read the conversation", conversation_id):
             await self._require(conversation_id)
             snapshot = await self._graph.aget_state(thread_config(conversation_id))
+        messages = snapshot.values.get("messages", [])
         return ConversationView(
-            messages=to_history(snapshot.values.get("messages", [])),
-            status=turn_status(snapshot.values, paused=bool(snapshot.next)),
+            messages=to_history(messages),
+            status=turn_status(snapshot.values, bool(snapshot.next), last_reply_message(messages)),
         )
 
     async def _require(self, conversation_id: UUID) -> None:
