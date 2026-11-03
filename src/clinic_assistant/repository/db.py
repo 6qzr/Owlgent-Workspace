@@ -1,11 +1,15 @@
+from psycopg import AsyncConnection
 from psycopg.conninfo import make_conninfo
-from psycopg.rows import dict_row
+from psycopg.rows import DictRow, dict_row
 from psycopg_pool import AsyncConnectionPool
 
 from clinic_assistant.config import Settings
 
+# Rows come back as dicts, so the type says so too (AsyncPostgresSaver requires it).
+type DictPool = AsyncConnectionPool[AsyncConnection[DictRow]]
 
-def create_pool(settings: Settings) -> AsyncConnectionPool:
+
+def create_pool(settings: Settings) -> DictPool:
     """Create the PostgreSQL asynchronous connection pool."""
     return AsyncConnectionPool(
         conninfo=make_conninfo(
@@ -15,6 +19,7 @@ def create_pool(settings: Settings) -> AsyncConnectionPool:
             user=settings.postgres_user,
             password=settings.postgres_password.get_secret_value(),
         ),
+        connection_class=AsyncConnection[DictRow],
         kwargs={
             "autocommit": True,
             "row_factory": dict_row,

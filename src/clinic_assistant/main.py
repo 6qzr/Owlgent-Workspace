@@ -1,58 +1,67 @@
 """Application factory: creates the FastAPI app and wires dependencies at start-up."""
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
-from typing import Any, Protocol
+from dataclasses import dataclass
 
 from fastapi import FastAPI
 
 from clinic_assistant import __version__
+from clinic_assistant.agent.checkpointer import open_checkpointer
+from clinic_assistant.agent.graph import ConversationGraph, build_graph
 from clinic_assistant.api import health
-from clinic_assistant.config import get_settings
-from clinic_assistant.repository.db import create_pool
-
-
-class DatabaseConnection(Protocol):
-    """Operations required from a database connection."""
-
-    async def execute(self, query: str) -> Any: ...
-
-
-class DatabasePool(Protocol):
-    """Operations required from the application database pool."""
-
-    async def open(self, wait: bool = False) -> None: ...
-
-    async def close(self) -> None: ...
-
-    def connection(self) -> AbstractAsyncContextManager[DatabaseConnection]: ...
-
+from clinic_assistant.config import Settings, get_settings
+from clinic_assistant.llm import LLM
+from clinic_assistant.llm.factory import create_llm
+from clinic_assistant.repository.db import DictPool, create_pool
 
 APP_TITLE = "Clinic Front-Desk Assistant"
+POOL_OPEN_TIMEOUT_SECONDS = 10.0
 
 
-def create_app(pool: DatabasePool | None = None) -> FastAPI:
-    """Create the FastAPI app and manage the database pool lifecycle."""
+@dataclass(frozen=True)
+class Runtime:
+    """Long-lived objects built once at start-up and shared by every request."""
+
+    graph: ConversationGraph
+    pool: DictPool
+
+
+type RuntimeFactory = Callable[[], AbstractAsyncContextManager[Runtime]]
+
+
+@asynccontextmanager
+async def postgres_runtime(settings: Settings, llm: LLM) -> AsyncIterator[Runtime]:
+    """Open the pool and checkpointer, build the graph, and close the pool on exit."""
+    pool = create_pool(settings)
+    await pool.open(wait=True, timeout=POOL_OPEN_TIMEOUT_SECONDS)
+    try:
+        checkpointer = await open_checkpointer(pool)
+        yield Runtime(graph=build_graph(llm, checkpointer), pool=pool)
+    finally:
+        await pool.close()
+
+
+def default_runtime() -> AbstractAsyncContextManager[Runtime]:
+    """Production runtime: settings from env, the LLM_PROVIDER adapter, PostgreSQL state."""
+    settings = get_settings()
+    return postgres_runtime(settings, create_llm(settings))
+
+
+def create_app(runtime: RuntimeFactory = default_runtime) -> FastAPI:
+    """Create the FastAPI app; each slice registers its router here.
+
+    The runtime is opened in the lifespan and stored on ``app.state.runtime``.
+    """
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        app_pool = create_pool(get_settings()) if pool is None else pool
-
-        try:
-            await app_pool.open(wait=True)
-            app.state.pool = app_pool
+        async with runtime() as opened:
+            app.state.runtime = opened
             yield
-        finally:
-            await app_pool.close()
 
-    app = FastAPI(
-        title=APP_TITLE,
-        version=__version__,
-        lifespan=lifespan,
-    )
-
+    app = FastAPI(title=APP_TITLE, version=__version__, lifespan=lifespan)
     app.include_router(health.router)
-
     return app
 
 
