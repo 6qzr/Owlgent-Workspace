@@ -1,5 +1,10 @@
 """Builds the conversation graph; matches docs/architecture.md §2. Only the lead edits this file."""
 
+from collections.abc import Awaitable
+from dataclasses import dataclass
+from typing import Any, Protocol, cast
+
+from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
@@ -22,10 +27,39 @@ from clinic_assistant.agent.nodes.slots import find_slots
 from clinic_assistant.agent.routing import route_after_booking, route_after_safety, route_intent
 from clinic_assistant.agent.state import ConversationState
 from clinic_assistant.llm import LLM
+from clinic_assistant.repository.approvals import ApprovalsRepository
 
 type ConversationGraph = CompiledStateGraph[
     ConversationState, None, ConversationState, ConversationState
 ]
+
+
+class ConfigNode(Protocol):
+    """A node that also takes the run config; LangGraph matches the `config` name."""
+
+    def __call__(self, state: ConversationState, config: RunnableConfig) -> Awaitable[Update]: ...
+
+
+@dataclass(frozen=True)
+class Repositories:
+    """Database access the nodes need; built from the shared pool at start-up."""
+
+    approvals: ApprovalsRepository | None = None
+
+
+def with_configurable(node: ConfigNode, values: dict[str, Any]) -> ConfigNode:
+    """Wrap a node so it always finds `values` in config["configurable"].
+
+    Keeps owners' nodes unchanged while the service never has to pass repositories itself.
+    Values the caller already set (e.g. on resume) win.
+    """
+
+    async def run(state: ConversationState, config: RunnableConfig) -> Update:
+        configurable = {**values, **config.get("configurable", {})}
+        return await node(state, cast(RunnableConfig, {**config, "configurable": configurable}))
+
+    return run
+
 
 # Nodes that end the turn with a reply.
 REPLY_NODES = (
@@ -40,9 +74,13 @@ REPLY_NODES = (
 
 
 def build_graph(
-    llm: LLM, checkpointer: BaseCheckpointSaver[str] | None = None
+    llm: LLM,
+    checkpointer: BaseCheckpointSaver[str] | None = None,
+    repositories: Repositories | None = None,
 ) -> ConversationGraph:
-    """Wire every node and route; the LLM and checkpointer are injected (ADR 0001, 0008)."""
+    """Wire every node and route; LLM, checkpointer and repositories are injected (ADR 0008)."""
+    repos = repositories or Repositories()
+    approvals = {"approval_repository": repos.approvals} if repos.approvals else {}
 
     async def classify_with_llm(state: ConversationState) -> Update:
         return await classify(state, llm)
@@ -58,9 +96,9 @@ def build_graph(
     builder.add_node("prepare_booking", prepare_booking)
     builder.add_node("confirm_booking", confirm_booking)
     builder.add_node("prepare_cancel", prepare_cancel)
-    builder.add_node("record_approval", record_approval)
+    builder.add_node("record_approval", with_configurable(record_approval, approvals))
     builder.add_node("await_staff", await_staff)
-    builder.add_node("apply_decision", apply_decision)
+    builder.add_node("apply_decision", with_configurable(apply_decision, approvals))
     builder.add_node("notify_outcome", notify_outcome)
 
     builder.add_edge(START, "safety_gate")
