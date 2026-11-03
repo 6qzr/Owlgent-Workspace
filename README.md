@@ -13,7 +13,7 @@ Stack: Python 3.14 · uv · FastAPI · Pydantic · LangGraph · OpenAI SDK · Po
 ## Run it (anyone, from a fresh clone)
 
 ```bash
-cp .env.example .env        # then set OPENAI_API_KEY
+cp .env.example .env        # then set OPENAI_API_KEY, or LLM_PROVIDER=fake to run without a key
 docker compose up -d --build
 docker compose ps           # every service should be "healthy"
 ```

@@ -60,6 +60,9 @@ jobs:
           --health-retries 10
     env:
       DATABASE_URL: postgresql://clinic:clinic@localhost:5432/clinic
+      POSTGRES_USER: clinic
+      POSTGRES_PASSWORD: clinic
+      POSTGRES_DB: clinic
       # Tests use the fake LLM; no real key ever reaches CI.
       OPENAI_API_KEY: ci-fake-key
     steps:
