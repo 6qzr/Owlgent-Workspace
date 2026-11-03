@@ -15,6 +15,10 @@ class Entities(TypedDict, total=False):
     specialty: str
     booking_day: str
     booking_id: int
+    patient_name: str
+    patient_phone: str
+    # 1-based number of the slot the patient picked from slots_offered.
+    slot_choice: int
 
 
 class PendingAction(TypedDict):
@@ -47,8 +51,9 @@ class ConversationState(TypedDict):
     sources: NotRequired[list[str]]
     # Writer: find_slots (slot ids offered to the patient).
     slots_offered: NotRequired[list[int]]
-    # Writer: prepare_booking / prepare_cancel.
-    pending_action: NotRequired[PendingAction]
+    # Writer: prepare_booking / prepare_cancel, on EVERY run (None when nothing waits for staff),
+    # so a value from an earlier turn never reroutes this one.
+    pending_action: NotRequired[PendingAction | None]
     # Writer: record_approval.
     approval_id: NotRequired[int]
     # Writer: the resume input, read by apply_decision.
