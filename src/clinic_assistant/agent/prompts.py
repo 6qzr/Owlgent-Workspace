@@ -4,6 +4,9 @@
 # Move to Settings.max_history_messages once the config from #55 is merged.
 CLASSIFY_HISTORY_WINDOW = 10
 
+# Below this confidence the assistant asks a clarifying question instead of guessing (FR-2).
+ROUTING_CONFIDENCE_THRESHOLD = 0.6
+
 CLASSIFY_SYSTEM_PROMPT = """\
 You classify messages sent to a private clinic's front-desk assistant.
 Return the patient's intent for their LATEST message, using the conversation for context:
