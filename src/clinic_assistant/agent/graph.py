@@ -28,6 +28,7 @@ from clinic_assistant.agent.routing import route_after_booking, route_after_safe
 from clinic_assistant.agent.state import ConversationState
 from clinic_assistant.llm import LLM
 from clinic_assistant.repository.approvals import ApprovalsRepository
+from clinic_assistant.repository.slots import SlotsRepository
 
 type ConversationGraph = CompiledStateGraph[
     ConversationState, None, ConversationState, ConversationState
@@ -45,6 +46,7 @@ class Repositories:
     """Database access the nodes need; built from the shared pool at start-up."""
 
     approvals: ApprovalsRepository | None = None
+    slots: SlotsRepository | None = None
 
 
 def with_configurable(node: ConfigNode, values: dict[str, Any]) -> ConfigNode:
@@ -81,6 +83,7 @@ def build_graph(
     """Wire every node and route; LLM, checkpointer and repositories are injected (ADR 0008)."""
     repos = repositories or Repositories()
     approvals = {"approval_repository": repos.approvals} if repos.approvals else {}
+    slots = {"slots_repository": repos.slots} if repos.slots else {}
 
     async def classify_with_llm(state: ConversationState) -> Update:
         return await classify(state, llm)
@@ -91,7 +94,7 @@ def build_graph(
     builder.add_node("classify", classify_with_llm)
     builder.add_node("clarify", clarify)
     builder.add_node("answer_from_docs", answer_from_docs)
-    builder.add_node("find_slots", find_slots)
+    builder.add_node("find_slots", with_configurable(find_slots, slots))
     builder.add_node("polite_scope_reply", polite_scope_reply)
     builder.add_node("prepare_booking", prepare_booking)
     builder.add_node("confirm_booking", confirm_booking)

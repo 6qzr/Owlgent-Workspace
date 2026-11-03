@@ -23,17 +23,17 @@ class SlotResponse(BaseModel):
 
 
 def get_slots_repository(request: Request) -> SlotsRepository:
-    """Read the repository provided by the app at startup."""
+    """Build the repository on the shared pool of the runtime opened at start-up."""
 
-    repository = getattr(request.app.state, "slots_repository", None)
+    runtime = getattr(request.app.state, "runtime", None)
 
-    if not isinstance(repository, SlotsRepository):
+    if runtime is None:
         raise HTTPException(
             status_code=503,
             detail="Slots service is not available.",
         )
 
-    return repository
+    return SlotsRepository(runtime.pool)
 
 
 @router.get("", response_model=list[SlotResponse])

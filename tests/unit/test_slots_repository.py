@@ -4,14 +4,13 @@ from datetime import date
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
-from psycopg_pool import AsyncConnectionPool
-
+from clinic_assistant.repository.db import DictPool
 from clinic_assistant.repository.slots import SlotsRepository
 
 
 def make_fake_pool(
     rows: list[dict[str, Any]],
-) -> tuple[AsyncConnectionPool, AsyncMock]:
+) -> tuple[DictPool, AsyncMock]:
     """Create a fake database pool and cursor."""
 
     # Fake cursor that returns the provided rows.
@@ -27,7 +26,7 @@ def make_fake_pool(
     pool = MagicMock()
     pool.connection.return_value.__aenter__.return_value = connection
 
-    return cast(AsyncConnectionPool, pool), cast(AsyncMock, cursor.execute)
+    return cast(DictPool, pool), cast(AsyncMock, cursor.execute)
 
 
 async def test_returns_free_slots() -> None:

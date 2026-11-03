@@ -1,15 +1,16 @@
 """Test Issue #14 slots API."""
 
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from psycopg_pool import AsyncConnectionPool
 
 from clinic_assistant.api.slots import router
+from clinic_assistant.repository.db import DictPool
 from clinic_assistant.repository.slots import SlotsRepository
 
 
@@ -20,8 +21,8 @@ def make_client() -> TestClient:
     app.include_router(router)
 
     # Provide a repository without a real database.
-    pool = cast(AsyncConnectionPool, MagicMock())
-    app.state.slots_repository = SlotsRepository(pool)
+    pool = cast(DictPool, MagicMock())
+    app.state.runtime = SimpleNamespace(pool=pool)  # the dependency builds SlotsRepository on it
 
     return TestClient(app)
 
