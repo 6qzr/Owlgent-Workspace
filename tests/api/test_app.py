@@ -5,6 +5,9 @@ from contextlib import asynccontextmanager
 
 from fastapi.testclient import TestClient
 from langgraph.checkpoint.memory import InMemorySaver
+from psycopg import AsyncConnection
+from psycopg.rows import DictRow
+from psycopg_pool import AsyncConnectionPool
 
 from clinic_assistant.agent.graph import build_graph
 from clinic_assistant.llm import FakeLLM
@@ -15,7 +18,9 @@ class FakeRuntime:
     """Builds an in-memory runtime and records whether it was closed."""
 
     def __init__(self) -> None:
-        self.runtime = Runtime(graph=build_graph(FakeLLM(), InMemorySaver()))
+        # Never opened, so no database is needed; these tests don't query it.
+        pool = AsyncConnectionPool("", connection_class=AsyncConnection[DictRow], open=False)
+        self.runtime = Runtime(graph=build_graph(FakeLLM(), InMemorySaver()), pool=pool)
         self.closed = False
 
     @asynccontextmanager
