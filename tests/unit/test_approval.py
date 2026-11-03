@@ -1,7 +1,7 @@
 """Test approval nodes without a database."""
-from langchain_core.runnables import RunnableConfig
-from clinic_assistant.agent.state import ConversationState
+
 import pytest
+from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command
@@ -35,10 +35,10 @@ async def test_staff_decision(
 ) -> None:
     """Test staff approval and rejection."""
 
-    # Create a small test graph.
+    # Create the test graph.
     builder = StateGraph(ConversationState)
 
-    # Add only the nodes that work without a database.
+    # Add the approval nodes.
     builder.add_node("await_staff", await_staff)
     builder.add_node("notify_outcome", notify_outcome)
 
@@ -47,19 +47,29 @@ async def test_staff_decision(
     builder.add_edge("await_staff", "notify_outcome")
     builder.add_edge("notify_outcome", END)
 
-    # Store graph state in temporary memory.
+    # Use temporary memory to save the workflow state.
     graph = builder.compile(checkpointer=InMemorySaver())
 
-    # Give each test its own conversation.
-    config = {"configurable": {"thread_id": f"approval-test-{approved}"}}
+    # Create a unique conversation for each test.
+    config: RunnableConfig = {
+        "configurable": {
+            "thread_id": f"approval-test-{approved}",
+        }
+    }
 
-    # Start the workflow.
+    # Define the input state.
+    initial_state: ConversationState = {
+        "messages": [],
+        "approval_id": 1,
+    }
+
+    # Start the graph.
     first = await graph.ainvoke(
-        {"messages": [], "approval_id": 1},
+        initial_state,
         config=config,
     )
 
-    # The graph should pause.
+    # Check that the graph paused for staff.
     assert "__interrupt__" in first
 
     # Resume with the staff decision.
@@ -74,41 +84,53 @@ async def test_staff_decision(
         config=config,
     )
 
-    # Check the staff decision.
+    # Check the decision.
     assert result["decision"]["approved"] is approved
     assert result["decision"]["reason"] == reason
 
-    # Check the patient's message.
-    # The leader's reply_update helper may store replies
-    # differently, so this assumes state["reply"] is a string.
+    # Check the patient message.
     assert result["reply"] == expected_reply
 
 
 async def test_invalid_staff_decision() -> None:
     """Test that invalid staff decisions are rejected."""
 
-    # Create a graph with the pause node.
+    # Create the test graph.
     builder = StateGraph(ConversationState)
 
+    # Add the staff approval node.
     builder.add_node("await_staff", await_staff)
 
+    # Connect the graph.
     builder.add_edge(START, "await_staff")
     builder.add_edge("await_staff", END)
 
-    # Save the state in memory.
+    # Save the graph state in temporary memory.
     graph = builder.compile(checkpointer=InMemorySaver())
 
-    config = {"configurable": {"thread_id": "invalid-decision"}}
+    # Create a separate conversation.
+    config: RunnableConfig = {
+        "configurable": {
+            "thread_id": "invalid-decision",
+        }
+    }
 
-    # Start and pause.
+    # Define the input state.
+    initial_state: ConversationState = {
+        "messages": [],
+        "approval_id": 2,
+    }
+
+    # Start the graph.
     first = await graph.ainvoke(
-        {"messages": [], "approval_id": 2},
+        initial_state,
         config=config,
     )
 
+    # Check that the workflow paused.
     assert "__interrupt__" in first
 
-    # Resume with invalid data.
+    # Try to resume with an invalid decision.
     with pytest.raises(
         ValueError,
         match="Invalid staff decision",
