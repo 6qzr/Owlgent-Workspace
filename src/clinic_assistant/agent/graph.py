@@ -1,0 +1,77 @@
+"""Builds the conversation graph; matches docs/architecture.md §2. Only the lead edits this file."""
+
+from langgraph.checkpoint.base import BaseCheckpointSaver
+from langgraph.graph import END, START, StateGraph
+from langgraph.graph.state import CompiledStateGraph
+
+from clinic_assistant.agent.nodes import Update
+from clinic_assistant.agent.nodes.answer_docs import answer_from_docs
+from clinic_assistant.agent.nodes.approval import (
+    apply_decision,
+    await_staff,
+    notify_outcome,
+    record_approval,
+)
+from clinic_assistant.agent.nodes.booking import confirm_booking, prepare_booking
+from clinic_assistant.agent.nodes.cancel import prepare_cancel
+from clinic_assistant.agent.nodes.clarify import clarify
+from clinic_assistant.agent.nodes.classify import classify
+from clinic_assistant.agent.nodes.safety import emergency_reply, safety_gate
+from clinic_assistant.agent.nodes.scope import polite_scope_reply
+from clinic_assistant.agent.nodes.slots import find_slots
+from clinic_assistant.agent.routing import route_after_booking, route_after_safety, route_intent
+from clinic_assistant.agent.state import ConversationState
+from clinic_assistant.llm import LLM
+
+type ConversationGraph = CompiledStateGraph[
+    ConversationState, None, ConversationState, ConversationState
+]
+
+# Nodes that end the turn with a reply.
+REPLY_NODES = (
+    "emergency_reply",
+    "clarify",
+    "answer_from_docs",
+    "find_slots",
+    "polite_scope_reply",
+    "confirm_booking",
+    "notify_outcome",
+)
+
+
+def build_graph(
+    llm: LLM, checkpointer: BaseCheckpointSaver[str] | None = None
+) -> ConversationGraph:
+    """Wire every node and route; the LLM and checkpointer are injected (ADR 0001, 0008)."""
+
+    async def classify_with_llm(state: ConversationState) -> Update:
+        return await classify(state, llm)
+
+    builder = StateGraph(ConversationState)
+    builder.add_node("safety_gate", safety_gate)
+    builder.add_node("emergency_reply", emergency_reply)
+    builder.add_node("classify", classify_with_llm)
+    builder.add_node("clarify", clarify)
+    builder.add_node("answer_from_docs", answer_from_docs)
+    builder.add_node("find_slots", find_slots)
+    builder.add_node("polite_scope_reply", polite_scope_reply)
+    builder.add_node("prepare_booking", prepare_booking)
+    builder.add_node("confirm_booking", confirm_booking)
+    builder.add_node("prepare_cancel", prepare_cancel)
+    builder.add_node("record_approval", record_approval)
+    builder.add_node("await_staff", await_staff)
+    builder.add_node("apply_decision", apply_decision)
+    builder.add_node("notify_outcome", notify_outcome)
+
+    builder.add_edge(START, "safety_gate")
+    builder.add_conditional_edges("safety_gate", route_after_safety)
+    builder.add_conditional_edges("classify", route_intent)
+    builder.add_conditional_edges("prepare_booking", route_after_booking)
+    builder.add_edge("prepare_cancel", "record_approval")
+    builder.add_edge("record_approval", "await_staff")
+    builder.add_edge("await_staff", "apply_decision")
+    builder.add_edge("apply_decision", "notify_outcome")
+    for node in REPLY_NODES:
+        builder.add_edge(node, END)
+
+    return builder.compile(checkpointer=checkpointer)
