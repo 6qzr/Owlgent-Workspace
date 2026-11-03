@@ -1,10 +1,23 @@
 # One command starts the whole system:  docker compose up -d --build
-# First version: PostgreSQL only. The `api` service (built from ./Dockerfile,
-# depends_on db: service_healthy, publishes ${API_PORT}) is added by the Ops story.
 
 name: clinic-assistant
 
 services:
+  api:
+    build: .
+    env_file: .env
+    environment:
+      # Services reach each other by service name (`db`), never localhost or an IP.
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    depends_on:
+      db:
+        # Wait until PostgreSQL answers pg_isready, not merely until its container starts.
+        condition: service_healthy
+    ports:
+      # Only the API is published. The container always listens on 8000.
+      - "${API_PORT}:8000"
+    restart: unless-stopped
+
   db:
     image: postgres:17.6
     env_file: .env
