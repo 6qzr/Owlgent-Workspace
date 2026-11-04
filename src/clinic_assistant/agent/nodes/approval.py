@@ -6,20 +6,8 @@ from uuid import UUID
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import interrupt
 
-from clinic_assistant.agent.nodes import Update, reply_update
+from clinic_assistant.agent.nodes import Update, get_repository, reply_update
 from clinic_assistant.agent.state import ConversationState, Decision
-from clinic_assistant.repository.approvals import ApprovalsRepository
-
-
-def get_repository(config: RunnableConfig) -> ApprovalsRepository:
-    """Get the repository passed when running the graph."""
-
-    repository = config.get("configurable", {}).get("approval_repository")
-
-    if not isinstance(repository, ApprovalsRepository):
-        raise RuntimeError("Approval repository is not configured")
-
-    return repository
 
 
 async def record_approval(

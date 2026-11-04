@@ -3,6 +3,9 @@
 from typing import Any
 
 from langchain_core.messages import AIMessage, BaseMessage
+from langchain_core.runnables import RunnableConfig
+
+from clinic_assistant.repository.approvals import ApprovalsRepository
 
 type Update = dict[str, Any]
 
@@ -19,6 +22,14 @@ def reply_update(text: str, kind: str | None = None) -> Update:
     """
     metadata = {REPLY_KIND: kind} if kind else {}
     return {"reply": text, "messages": [AIMessage(text, response_metadata=metadata)]}
+
+
+def get_repository(config: RunnableConfig) -> ApprovalsRepository:
+    """The ApprovalsRepository graph.py injects into config; shared by the approval nodes."""
+    repository = config.get("configurable", {}).get("approval_repository")
+    if not isinstance(repository, ApprovalsRepository):
+        raise RuntimeError("Approval repository is not configured")
+    return repository
 
 
 def reply_kind(message: BaseMessage) -> str | None:

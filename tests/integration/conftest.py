@@ -2,6 +2,9 @@
 
 import asyncio
 from collections.abc import AsyncIterator, Mapping
+from datetime import UTC, datetime, timedelta
+from typing import NamedTuple
+from uuid import UUID, uuid4
 
 import psycopg
 import pytest
@@ -80,3 +83,59 @@ def paused_graph(saver: AsyncPostgresSaver) -> ConversationGraph:
     builder.add_edge(START, "await_staff")
     builder.add_edge("await_staff", END)
     return builder.compile(checkpointer=saver)
+
+
+class SeededBooking(NamedTuple):
+    """Ids of a confirmed booking created for one test."""
+
+    booking_id: int
+    conversation_id: UUID
+    slot_id: int
+    doctor_id: int
+
+
+@pytest.fixture
+async def confirmed_booking(pool: DictPool) -> AsyncIterator[SeededBooking]:
+    """A confirmed booking with its own conversation, doctor and future slot, removed after.
+
+    It never touches seed data, so tests can cancel it or free its slot safely. Seeding is one
+    transaction, so a failure part-way leaves nothing behind.
+    """
+    conversation_id = uuid4()
+    starts_at = datetime.now(UTC) + timedelta(days=30)
+    async with pool.connection() as conn, conn.transaction():
+        await conn.execute("INSERT INTO conversations (id) VALUES (%s)", (conversation_id,))
+        cur = await conn.execute(
+            "INSERT INTO doctors (name, specialty) VALUES (%s, 'Test') RETURNING id",
+            (f"Test Doctor {conversation_id}",),
+        )
+        doctor = await cur.fetchone()
+        assert doctor is not None
+        cur = await conn.execute(
+            "INSERT INTO slots (doctor_id, starts_at, ends_at) VALUES (%s, %s, %s) RETURNING id",
+            (doctor["id"], starts_at, starts_at + timedelta(minutes=30)),
+        )
+        slot = await cur.fetchone()
+        assert slot is not None
+        cur = await conn.execute(
+            "INSERT INTO bookings (slot_id, conversation_id, patient_name, patient_phone, status)"
+            " VALUES (%s, %s, 'Test Patient', '90000000', 'confirmed') RETURNING id",
+            (slot["id"], conversation_id),
+        )
+        booking = await cur.fetchone()
+        assert booking is not None
+    seeded = SeededBooking(booking["id"], conversation_id, slot["id"], doctor["id"])
+    try:
+        yield seeded
+    finally:
+        # The conversation's checkpoints first, then its rows in foreign-key order. Approvals go
+        # by conversation, so one for another booking can't block the conversation delete.
+        await (await open_checkpointer(pool)).adelete_thread(str(conversation_id))
+        async with pool.connection() as conn, conn.transaction():
+            await conn.execute(
+                "DELETE FROM approvals WHERE conversation_id = %s", (conversation_id,)
+            )
+            await conn.execute("DELETE FROM bookings WHERE id = %s", (seeded.booking_id,))
+            await conn.execute("DELETE FROM slots WHERE id = %s", (seeded.slot_id,))
+            await conn.execute("DELETE FROM doctors WHERE id = %s", (seeded.doctor_id,))
+            await conn.execute("DELETE FROM conversations WHERE id = %s", (conversation_id,))
