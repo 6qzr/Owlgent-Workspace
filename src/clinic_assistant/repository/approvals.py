@@ -137,11 +137,49 @@ class ApprovalsRepository:
 
             row = await cur.fetchone()
 
-            # Return None if approval does not exist.
             if row is None:
                 return None
 
             return dict(row)
+
+            # Find a confirmed booking owned by this conversation.
+
+    async def find_cancellable_booking(
+        self,
+        booking_id: int,
+        conversation_id: UUID,
+    ) -> dict[str, Any] | None:
+        """Find a confirmed booking owned by this conversation."""
+
+        # Only allow cancellation of confirmed bookings
+        # belonging to the current conversation.
+        query = """
+            SELECT
+                id,
+                slot_id,
+                conversation_id,
+                status
+            FROM bookings
+            WHERE id = %s
+              AND conversation_id = %s
+              AND status = 'confirmed'
+            LIMIT 1
+        """
+
+        async with (
+            self.pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cur,
+        ):
+            await cur.execute(
+                query,
+                (booking_id, conversation_id),
+            )
+            booking = await cur.fetchone()
+
+        # Return None if the booking does not exist,
+        # belongs to another conversation,
+        # or is not confirmed.
+        return dict(booking) if booking is not None else None
 
     async def decide(
         self,
