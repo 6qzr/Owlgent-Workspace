@@ -25,8 +25,13 @@ Nothing else is needed: no local Python, no manual SQL. PostgreSQL creates its s
 ```bash
 uv sync                      # creates .venv from uv.lock (never use pip)
 uv run pre-commit install    # ruff + mypy before every commit
+cp .env.example .env         # LLM_PROVIDER=fake runs the app locally without an OpenAI key
 docker compose -f compose.yaml -f compose.dev.yaml up -d db   # local PostgreSQL on 127.0.0.1:5432
 ```
+
+Tests give the same result whatever is in your shell or `.env`. They always use the fake LLM, and only read the database values from `.env`. If PostgreSQL isn't running, the integration tests stop at once and print the command above. To run without a database, use `uv run pytest -m "not integration"`.
+
+On WSL, run everything from your own clone inside WSL, with its own `.venv` and `.env`. A `.venv` created on Windows doesn't work on Linux.
 
 | Check | Command |
 |---|---|
