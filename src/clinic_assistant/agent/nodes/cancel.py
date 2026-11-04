@@ -7,7 +7,7 @@ from uuid import UUID
 
 from langchain_core.runnables import RunnableConfig
 
-from clinic_assistant.agent.nodes import Update, reply_update
+from clinic_assistant.agent.nodes import CLARIFYING, Update, reply_update
 from clinic_assistant.agent.state import ConversationState
 from clinic_assistant.domain import ApprovalAction
 from clinic_assistant.repository.approvals import ApprovalsRepository
@@ -41,7 +41,7 @@ async def prepare_cancel(
     if booking_id is None or booking_id <= 0:
         return {
             "pending_action": None,
-            **reply_update(MISSING_BOOKING_ID),
+            **reply_update(MISSING_BOOKING_ID, kind=CLARIFYING),
         }
 
     # The conversation ID is stored as LangGraph's thread ID.
