@@ -65,16 +65,21 @@ Each member records how they actually worked: tools, a real example, and what th
   
 - **Still learning:** the `interrupt`/resume internals behind the approval flow (#16, #17), and RAG retrieval once #13 lands.
 
-  
 ### @baraah34 (R2: approvals, slots, cancel)
 
-- **Tool:**
-- **Planning:**
-- **Code:**
-- **Reviews:**
-- **Verification:**
-- **Understanding (one real question you asked, and the answer):**
-- **Still learning:**
+- **Tool:** ChatGPT for planning, understanding code, debugging, and reviewing feedback. VS Code for development and GitHub for managing issues and PRs.
+
+- **Planning:** I worked on three issues: #14 (Find Free Slots), #16 (Staff Approval), and #17 (Cancellation). I reviewed the requirements and implemented each feature step by step.
+
+- **Code:** Implemented free-slot searching using PostgreSQL, Human-in-the-Loop approvals using LangGraph `interrupt()` and `Command(resume=...)`, and cancellation with booking ownership validation and staff approval.
+
+- **Reviews:** Reviewed teammates' PRs and used feedback to improve my implementation, including fixing cancellation responses and simplifying the approval restart test.
+
+- **Verification:** Ran Ruff and pytest, and tested the approval workflow with real PostgreSQL. Verified that pending approvals survive a restart, approved cancellations release slots, and rejected cancellations keep bookings confirmed.
+
+- **Understanding (one real question I asked, and the answer):** *"Why do we need PostgreSQL checkpoints for staff approval?"* Because LangGraph pauses while waiting for staff. PostgreSQL preserves the workflow state, allowing it to resume even after the application restarts.
+
+- **Still learning:** LangGraph checkpoint internals, advanced integration testing, and understanding how all agent nodes work together.
 
 ### @NoorAlbusaidi (R3: database foundation, health, RAG, booking)
 
