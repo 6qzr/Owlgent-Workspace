@@ -1,8 +1,10 @@
 # Builds the API image. Used by compose locally, in CI (compose-up) and on the VM.
 FROM python:3.14-slim
 
-# uv comes from its own published image: no pip, and the version is explicit.
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+# uv comes from its own published image: no pip. Pinned, never `latest`: `latest` can
+# point to a different uv between two builds of the same tag, so rebuilding an old tag
+# for a rollback (ADR 0009) would no longer give the same image. Matches the team's uv.
+COPY --from=ghcr.io/astral-sh/uv:0.12.23 /uv /uvx /bin/
 
 WORKDIR /app
 
