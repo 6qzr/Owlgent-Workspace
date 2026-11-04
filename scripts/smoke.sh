@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Smoke test for a running deployment (issue #19): health → start → message → fetch history.
+# Smoke test for a running deployment (issue #19): health → start → message → fetch history,
+# then an emergency in its own conversation (FR-6).
 #
 # Usage: scripts/smoke.sh [BASE_URL]        (default http://localhost:8000)
 # Needs: bash, curl, jq. Exits non-zero with a FAIL line on the first failed step.
@@ -15,6 +16,8 @@ set -euo pipefail
 BASE_URL="${1:-http://localhost:8000}"
 BASE_URL="${BASE_URL%/}"
 MESSAGE="What are your opening hours?"
+# Caught by the rule-based safety gate, so it works with any LLM provider.
+EMERGENCY_MESSAGE="I have chest pain"
 CURL_TIMEOUT_SECONDS=30 # covers one LLM turn; the app's own LLM timeout is shorter
 
 BODY_FILE="$(mktemp)"
@@ -98,6 +101,21 @@ step_fetch_history() {
   pass "GET .../$CONVERSATION_ID: history has $(json_field '.messages | length') messages"
 }
 
+# A new conversation, so the emergency never mixes with the history checked above.
+step_emergency() {
+  local conversation_id body
+  request POST /api/v1/conversations 201
+  conversation_id="$(json_field '.conversation_id')"
+  body="$(jq -n --arg message "$EMERGENCY_MESSAGE" '{message: $message}')"
+  request POST "/api/v1/conversations/$conversation_id/messages" 200 "$body"
+  expect '.status == "emergency" and (.reply | length > 0)' \
+    "emergency: expected status emergency with the instruction"
+  request GET /api/v1/emergencies 200
+  expect 'any(.[]; .conversation_id == $id)' \
+    "emergency: no staff flag stored for the conversation" --arg id "$conversation_id"
+  pass "emergency: short-circuited and flagged for staff"
+}
+
 STEPS=(
   step_health
   step_start_conversation
@@ -105,6 +123,7 @@ STEPS=(
   # step_book     (#15)
   # step_approve  (#16)
   step_fetch_history
+  step_emergency
 )
 
 command -v curl >/dev/null || fail "curl is not installed"
