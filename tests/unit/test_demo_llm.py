@@ -63,3 +63,16 @@ async def test_unsupported_schema_raises_llm_error() -> None:
 
     with pytest.raises(LLMError):
         await DemoLLM().parse([HumanMessage("hi")], Unrelated)
+
+
+async def test_choosing_an_offered_slot_is_a_booking() -> None:
+    result = await classify("Book number 2, my name is Sara Ali, phone 9123 4567")
+
+    assert result.intent is Intent.BOOK
+    assert result.slot_choice == 2
+    assert result.patient_name == "Sara Ali"
+    assert result.patient_phone == "91234567"
+
+
+async def test_asking_for_slots_is_still_find_slots() -> None:
+    assert (await classify("Any free dentist slot tomorrow?")).intent is Intent.FIND_SLOTS

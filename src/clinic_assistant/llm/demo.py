@@ -34,6 +34,11 @@ DAY_WORDS = (
     "friday",
     "saturday",
 )
+# "book number 2" / "book slot 2": picks from the slots find_slots offered; checked before the
+# word rules, because "slot" alone means find_slots.
+SLOT_CHOICE = re.compile(r"\b(?:book|take|choose)\s+(?:slot|number|option)?\s*#?(\d+)\b")
+NAME = re.compile(r"\b(?:my name is|name is|name:)\s*([a-z]+(?:\s+[a-z]+)?)")
+PHONE = re.compile(r"\+?\d[\d\s-]{6,}\d")
 # Checked in order; the first rule whose words appear in the message wins.
 INTENT_RULES: tuple[tuple[Intent, tuple[str, ...]], ...] = (
     (Intent.CANCEL, ("cancel",)),
@@ -56,8 +61,19 @@ def _has_word(text: str, word: str) -> bool:
 
 def classify_text(text: str) -> dict[str, object]:
     """Keyword classification of one message into intent, confidence and details."""
-    intent = next((i for i, words in INTENT_RULES if any(w in text for w in words)), Intent.OTHER)
+    choice = SLOT_CHOICE.search(text)
+    intent = (
+        Intent.BOOK
+        if choice
+        else next((i for i, words in INTENT_RULES if any(w in text for w in words)), Intent.OTHER)
+    )
     result: dict[str, object] = {"intent": intent, "confidence": 0.9}
+    if choice:
+        result["slot_choice"] = int(choice.group(1))
+    if name := NAME.search(text):
+        result["patient_name"] = name.group(1).title()
+    if phone := PHONE.search(text):
+        result["patient_phone"] = re.sub(r"[\s-]", "", phone.group())
     specialty = next((s for w, s in SPECIALTY_WORDS.items() if _has_word(text, w)), None)
     if specialty:
         result["specialty"] = specialty

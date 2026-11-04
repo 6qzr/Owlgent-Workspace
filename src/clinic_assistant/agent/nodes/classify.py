@@ -22,6 +22,9 @@ class Classification(BaseModel):
     specialty: str | None = None
     booking_day: str | None = None
     booking_id: int | None = None
+    patient_name: str | None = None
+    patient_phone: str | None = None
+    slot_choice: int | None = Field(default=None, ge=1)
 
 
 def to_entities(result: Classification) -> Entities:
@@ -35,6 +38,12 @@ def to_entities(result: Classification) -> Entities:
         entities["booking_day"] = result.booking_day
     if result.booking_id is not None:
         entities["booking_id"] = result.booking_id
+    if result.patient_name is not None:
+        entities["patient_name"] = result.patient_name
+    if result.patient_phone is not None:
+        entities["patient_phone"] = result.patient_phone
+    if result.slot_choice is not None:
+        entities["slot_choice"] = result.slot_choice
     return entities
 
 
