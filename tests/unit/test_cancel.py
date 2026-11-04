@@ -6,6 +6,7 @@ from uuid import uuid4
 import pytest
 from langchain_core.runnables import RunnableConfig
 
+from clinic_assistant.agent.nodes import CLARIFYING
 from clinic_assistant.agent.nodes.cancel import (
     MISSING_BOOKING_ID,
     NOT_FOUND,
@@ -149,6 +150,7 @@ async def test_prepare_cancel_missing_booking_id() -> None:
 
     assert result["pending_action"] is None
     assert result["reply"] == MISSING_BOOKING_ID
+    assert result["messages"][0].response_metadata["reply_kind"] == CLARIFYING
 
     # No database query is needed.
     repository.find_cancellable_booking.assert_not_awaited()
