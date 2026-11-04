@@ -302,3 +302,92 @@ async def test_invalid_booking_status() -> None:
             reason="Approved",
             staff="Receptionist",
         )
+
+
+async def test_find_cancellable_booking_owned() -> None:
+    """Find a confirmed booking belonging to this conversation."""
+
+    repository, cursor = make_repository()
+    conversation_id = uuid4()
+
+    cursor.fetchone.return_value = {
+        "id": 10,
+        "slot_id": 5,
+        "conversation_id": conversation_id,
+        "status": "confirmed",
+    }
+
+    result = await repository.find_cancellable_booking(
+        booking_id=10,
+        conversation_id=conversation_id,
+    )
+
+    assert result is not None
+    assert result["id"] == 10
+    assert result["status"] == "confirmed"
+
+    sql, params = cursor.execute.await_args.args
+
+    assert "FROM bookings" in sql
+    assert "conversation_id = %s" in sql
+    assert "status = 'confirmed'" in sql
+    assert params == (10, conversation_id)
+    assert cursor.execute.await_count == 1
+
+
+async def test_find_cancellable_booking_not_owned() -> None:
+    """Return None if the booking belongs to another conversation."""
+
+    repository, cursor = make_repository()
+    conversation_id = uuid4()
+
+    # SQL ownership filtering means no matching row.
+    cursor.fetchone.return_value = None
+
+    result = await repository.find_cancellable_booking(
+        booking_id=20,
+        conversation_id=conversation_id,
+    )
+
+    assert result is None
+
+    # Verify that the query filters by conversation and status.
+    sql = cursor.execute.await_args.args[0]
+    params = cursor.execute.await_args.args[1]
+
+    assert "conversation_id = %s" in sql
+    assert "status = 'confirmed'" in sql
+    assert params == (20, conversation_id)
+
+
+async def test_find_cancellable_booking_cancelled() -> None:
+    """Already cancelled bookings must not be cancellable again."""
+
+    repository, cursor = make_repository()
+    conversation_id = uuid4()
+
+    # The SQL query excludes non-confirmed bookings.
+    cursor.fetchone.return_value = None
+
+    result = await repository.find_cancellable_booking(
+        booking_id=10,
+        conversation_id=conversation_id,
+    )
+
+    assert result is None
+    assert "status = 'confirmed'" in cursor.execute.await_args.args[0]
+
+
+async def test_find_cancellable_booking_unknown() -> None:
+    """Unknown booking IDs return None."""
+
+    repository, cursor = make_repository()
+
+    cursor.fetchone.return_value = None
+
+    result = await repository.find_cancellable_booking(
+        booking_id=999,
+        conversation_id=uuid4(),
+    )
+
+    assert result is None

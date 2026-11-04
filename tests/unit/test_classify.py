@@ -2,6 +2,7 @@
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from pydantic import ValidationError
 
 from clinic_assistant.agent.nodes.classify import Classification, classify, to_entities
 from clinic_assistant.agent.state import ConversationState
@@ -67,3 +68,24 @@ async def test_model_failure_surfaces_as_llm_error() -> None:
 def test_confidence_outside_0_to_1_is_rejected() -> None:
     with pytest.raises(ValueError):
         Classification(intent=Intent.OTHER, confidence=1.5)
+
+
+def test_patient_details_and_slot_choice_are_kept() -> None:
+    result = Classification(
+        intent=Intent.BOOK,
+        confidence=0.9,
+        slot_choice=2,
+        patient_name="Sara Ali",
+        patient_phone="91234567",
+    )
+
+    assert to_entities(result) == {
+        "slot_choice": 2,
+        "patient_name": "Sara Ali",
+        "patient_phone": "91234567",
+    }
+
+
+def test_slot_choice_starts_at_one() -> None:
+    with pytest.raises(ValidationError):
+        Classification(intent=Intent.BOOK, confidence=0.9, slot_choice=0)

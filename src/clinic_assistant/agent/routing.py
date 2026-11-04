@@ -17,6 +17,7 @@ type AfterIntent = Literal[
     "prepare_cancel",
 ]
 type AfterBooking = Literal["record_approval", "confirm_booking"]
+type AfterCancel = Literal["record_approval", "__end__"]
 
 INTENT_TO_NODE: dict[Intent, AfterIntent] = {
     Intent.EMERGENCY: "emergency_reply",
@@ -30,6 +31,9 @@ INTENT_TO_NODE: dict[Intent, AfterIntent] = {
 # What the patient must give before a workflow can run; checked in code, never by the LLM.
 DOCTOR_OR_SPECIALTY = "doctor or specialty"
 DAY = "day"
+SLOT = "number of a slot from the list of free times"
+NAME = "name"
+PHONE = "phone number"
 
 
 def route_after_safety(state: ConversationState) -> AfterSafety:
@@ -42,12 +46,17 @@ def missing_details(state: ConversationState) -> list[str]:
     intent = state.get("intent")
     entities = state.get("entities", {})
     missing: list[str] = []
-    if intent in (Intent.FIND_SLOTS, Intent.BOOK) and not (
-        "doctor_name" in entities or "specialty" in entities
-    ):
+    if intent is Intent.FIND_SLOTS and not ("doctor_name" in entities or "specialty" in entities):
         missing.append(DOCTOR_OR_SPECIALTY)
-    if intent is Intent.BOOK and "booking_day" not in entities:
-        missing.append(DAY)
+    if intent is Intent.BOOK:
+        # The chosen slot fixes doctor and day; it must point into this conversation's offer.
+        choice = entities.get("slot_choice")
+        if choice is None or not 1 <= choice <= len(state.get("slots_offered", [])):
+            missing.append(SLOT)
+        if "patient_name" not in entities:
+            missing.append(NAME)
+        if "patient_phone" not in entities:
+            missing.append(PHONE)
     return missing
 
 
@@ -70,4 +79,9 @@ def route_intent(state: ConversationState) -> AfterIntent:
 
 def route_after_booking(state: ConversationState) -> AfterBooking:
     """Same-day bookings (pending_action set by prepare_booking) wait for staff."""
-    return "record_approval" if "pending_action" in state else "confirm_booking"
+    return "record_approval" if state.get("pending_action") is not None else "confirm_booking"
+
+
+def route_after_cancel(state: ConversationState) -> AfterCancel:
+    """A found booking waits for staff; otherwise prepare_cancel already replied, so end."""
+    return "record_approval" if state.get("pending_action") is not None else "__end__"  # END

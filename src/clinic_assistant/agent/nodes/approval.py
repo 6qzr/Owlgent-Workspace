@@ -29,7 +29,9 @@ async def record_approval(
     """Save the approval before the graph pauses."""
 
     # Get the pending booking or cancellation.
-    pending_action = state["pending_action"]
+    pending_action = state.get("pending_action")
+    if pending_action is None:
+        raise RuntimeError("record_approval needs pending_action from prepare_booking/cancel")
 
     # Use the conversation ID as the thread ID.
     thread_id = config["configurable"]["thread_id"]
