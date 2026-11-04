@@ -91,7 +91,7 @@ step_send_message() {
 step_fetch_history() {
   request GET "/api/v1/conversations/$CONVERSATION_ID" 200
   expect '.messages | length >= 2' "history: expected at least the message and its reply"
-  expect '.messages[0] == {role: "patient", content: $message}' \
+  expect '.messages[0].role == "patient" and .messages[0].content == $message' \
     "history: the first message is not the one sent" --arg message "$MESSAGE"
   expect 'any(.messages[]; .role == "assistant" and (.content | length > 0))' \
     "history: no assistant reply stored"
