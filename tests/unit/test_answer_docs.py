@@ -2,10 +2,12 @@
 
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 
 from clinic_assistant.agent.nodes.answer_docs import answer_from_docs
+from clinic_assistant.agent.prompts import DONT_KNOW
 from clinic_assistant.agent.state import ConversationState
 from clinic_assistant.kb.retriever import Retriever
 from clinic_assistant.llm import LLM
@@ -58,11 +60,7 @@ async def test_answer_from_docs_success() -> None:
         "messages": [HumanMessage("What time does the clinic open?")],
     }
 
-    result = await answer_from_docs(
-        state,
-        make_config(retriever),
-        llm,
-    )
+    result = await answer_from_docs(state, make_config(retriever), llm)
 
     assert "The clinic opens at 8 AM." in result["reply"]
     assert "opening_hours.md" in result["reply"]
@@ -82,13 +80,9 @@ async def test_answer_from_docs_no_results() -> None:
         "messages": [HumanMessage("Can I get a free car?")],
     }
 
-    result = await answer_from_docs(
-        state,
-        make_config(retriever),
-        llm,
-    )
+    result = await answer_from_docs(state, make_config(retriever), llm)
 
-    assert result["reply"] == "I don't know"
+    assert result["reply"] == DONT_KNOW
     assert result["sources"] == []
 
     retriever.search.assert_awaited_once_with("Can I get a free car?")
@@ -126,16 +120,41 @@ async def test_answer_from_docs_unique_sources() -> None:
         "messages": [HumanMessage("What are the clinic hours?")],
     }
 
-    result = await answer_from_docs(
-        state,
-        make_config(retriever),
-        llm,
-    )
+    result = await answer_from_docs(state, make_config(retriever), llm)
 
     assert result["sources"] == [
         "opening_hours.md",
         "clinic_policy.md",
     ]
+
+
+async def test_answer_from_docs_llm_does_not_know() -> None:
+    """Do not attach sources when the LLM cannot answer from the passages."""
+
+    retriever = make_retriever()
+    llm = make_llm()
+
+    retriever.search.return_value = [
+        {
+            "content": "The clinic opens at 8 AM.",
+            "source": "opening_hours.md",
+            "chunk_index": 0,
+            "score": 0.15,
+        }
+    ]
+    llm.complete.return_value = DONT_KNOW
+
+    state: ConversationState = {
+        "messages": [HumanMessage("Which dentist works at the clinic?")],
+    }
+
+    result = await answer_from_docs(state, make_config(retriever), llm)
+
+    assert result["reply"] == DONT_KNOW
+    assert result["sources"] == []
+
+    retriever.search.assert_awaited_once()
+    llm.complete.assert_awaited_once()
 
 
 async def test_answer_from_docs_empty_question() -> None:
@@ -148,13 +167,9 @@ async def test_answer_from_docs_empty_question() -> None:
         "messages": [HumanMessage("")],
     }
 
-    result = await answer_from_docs(
-        state,
-        make_config(retriever),
-        llm,
-    )
+    result = await answer_from_docs(state, make_config(retriever), llm)
 
-    assert result["reply"] == "I don't know"
+    assert result["reply"] == DONT_KNOW
     assert result["sources"] == []
 
     retriever.search.assert_not_awaited()
@@ -175,17 +190,13 @@ async def test_answer_from_docs_uses_latest_patient_message() -> None:
         ],
     }
 
-    await answer_from_docs(
-        state,
-        make_config(retriever),
-        llm,
-    )
+    await answer_from_docs(state, make_config(retriever), llm)
 
     retriever.search.assert_awaited_once_with("What time does the clinic open?")
 
 
 async def test_answer_from_docs_missing_retriever() -> None:
-    """Return I don't know when no retriever is configured."""
+    """Raise an error when no retriever is configured."""
 
     llm = make_llm()
 
@@ -193,13 +204,14 @@ async def test_answer_from_docs_missing_retriever() -> None:
         "messages": [HumanMessage("What are your opening hours?")],
     }
 
-    result = await answer_from_docs(
-        state,
-        {"configurable": {}},
-        llm,
-    )
-
-    assert result["reply"] == "I don't know"
-    assert result["sources"] == []
+    with pytest.raises(
+        RuntimeError,
+        match="Document retriever is not configured",
+    ):
+        await answer_from_docs(
+            state,
+            {"configurable": {}},
+            llm,
+        )
 
     llm.complete.assert_not_awaited()

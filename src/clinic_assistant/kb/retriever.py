@@ -3,7 +3,11 @@
 Owner: @NoorAlbusaidi (#13). Shell from #83 so the graph and app can wire it: add the methods.
 """
 
+import asyncio
+
 from clinic_assistant.repository.db import DictPool
+
+DB_TIMEOUT_SECONDS = 5.0
 
 
 class Retriever:
@@ -52,12 +56,13 @@ class Retriever:
             LIMIT %s;
         """
 
-        async with self.pool.connection() as conn:
-            cursor = await conn.execute(
-                sql,
-                (question, self.threshold, self.top_k),
-            )
-            rows = await cursor.fetchall()
+        async with asyncio.timeout(DB_TIMEOUT_SECONDS):
+            async with self.pool.connection() as conn:
+                cursor = await conn.execute(
+                    sql,
+                    (question, self.threshold, self.top_k),
+                )
+                rows = await cursor.fetchall()
 
         return [
             {

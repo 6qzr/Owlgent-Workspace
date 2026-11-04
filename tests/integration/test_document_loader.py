@@ -8,13 +8,15 @@ import pytest
 from clinic_assistant.kb import loader
 from clinic_assistant.repository.db import DictPool
 
+pytestmark = pytest.mark.integration
+
 
 async def test_load_documents_into_database(
     pool: DictPool,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Load paragraphs and update existing chunks without duplicates."""
+    """Load documents, preserve headings, and remove stale chunks."""
 
     source = f"test_{uuid4().hex}.md"
     document = tmp_path / source
@@ -27,7 +29,7 @@ async def test_load_documents_into_database(
     monkeypatch.setattr(loader, "DOCUMENTS_DIR", tmp_path)
 
     try:
-        # First run: insert two paragraphs.
+        # First run: insert two paragraphs with their heading.
         await loader.load_documents(pool)
 
         async with pool.connection() as conn:
@@ -44,11 +46,11 @@ async def test_load_documents_into_database(
 
         assert len(rows) == 2
         assert rows[0]["chunk_index"] == 0
-        assert rows[0]["content"] == "First paragraph."
+        assert rows[0]["content"] == "Test Policy:\nFirst paragraph."
         assert rows[1]["chunk_index"] == 1
-        assert rows[1]["content"] == "Second paragraph."
+        assert rows[1]["content"] == "Test Policy:\nSecond paragraph."
 
-        # Second run: should not create duplicate records.
+        # Second run: loading again must not create duplicates.
         await loader.load_documents(pool)
 
         async with pool.connection() as conn:
@@ -65,9 +67,9 @@ async def test_load_documents_into_database(
         assert result is not None
         assert result["total"] == 2
 
-        # Update the document and run the loader again.
+        # Third run: shorten the document to one paragraph.
         document.write_text(
-            "# Test Policy\n\nUpdated first paragraph.\n\nSecond paragraph.",
+            "# Test Policy\n\nUpdated first paragraph.",
             encoding="utf-8",
         )
 
@@ -76,16 +78,20 @@ async def test_load_documents_into_database(
         async with pool.connection() as conn:
             cursor = await conn.execute(
                 """
-                SELECT content
+                SELECT chunk_index, content
                 FROM doc_chunks
-                WHERE source = %s AND chunk_index = 0
+                WHERE source = %s
+                ORDER BY chunk_index
                 """,
                 (source,),
             )
-            updated_row = await cursor.fetchone()
+            updated_rows = await cursor.fetchall()
 
-        assert updated_row is not None
-        assert updated_row["content"] == "Updated first paragraph."
+        # The old second chunk must no longer exist.
+        assert len(updated_rows) == 1
+        assert updated_rows[0]["chunk_index"] == 0
+        assert updated_rows[0]["content"] == ("Test Policy:\nUpdated first paragraph.")
+
     finally:
         # Remove test records from PostgreSQL.
         async with pool.connection() as conn:
@@ -104,8 +110,6 @@ async def test_load_documents_empty_directory(
 
     monkeypatch.setattr(loader, "DOCUMENTS_DIR", tmp_path)
 
-    # The directory is empty.
     assert list(tmp_path.glob("*.md")) == []
 
-    # Loading should complete without errors.
     await loader.load_documents(pool)

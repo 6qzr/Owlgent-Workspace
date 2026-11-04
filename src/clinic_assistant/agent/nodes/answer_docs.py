@@ -1,6 +1,4 @@
-"""Answer clinic questions from the clinic documents and name the source.
-
-Owner: @NoorAlbusaidi (#13)."""
+"""Answer clinic questions from the clinic documents and name the source."""
 
 from typing import cast
 
@@ -8,6 +6,11 @@ from langchain_core.messages import AnyMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 
 from clinic_assistant.agent.nodes import Update, reply_update
+from clinic_assistant.agent.nodes.safety import latest_patient_text
+from clinic_assistant.agent.prompts import (
+    ANSWER_DOCS_SYSTEM_PROMPT,
+    DONT_KNOW,
+)
 from clinic_assistant.agent.state import ConversationState
 from clinic_assistant.kb.retriever import Retriever
 from clinic_assistant.llm import LLM
@@ -20,50 +23,34 @@ async def answer_from_docs(
 ) -> Update:
     """Answer only from retrieved passages, or say I don't know."""
 
-    # 1. Get the patient's latest question.
-    question = next(
-        (
-            str(message.content)
-            for message in reversed(state["messages"])
-            if isinstance(message, HumanMessage)
-        ),
-        "",
-    )
+    # Get the latest patient question using the shared helper.
+    question = latest_patient_text(state)
 
     if not question.strip():
-        return {"sources": [], **reply_update("I don't know")}
+        return {"sources": [], **reply_update(DONT_KNOW)}
 
-    # 2. Get the retriever injected by the graph.
+    # Get the retriever injected by the graph.
     configurable = config.get("configurable", {})
     retriever = cast(Retriever | None, configurable.get("retriever"))
 
     if retriever is None:
-        return {"sources": [], **reply_update("I don't know")}
+        raise RuntimeError("Document retriever is not configured")
 
-    # 3. Search the clinic documents.
+    # Search the clinic documents.
     chunks = await retriever.search(question)
 
-    # 4. If no relevant documents were found, don't call the LLM.
+    # Do not call the LLM when no relevant documents are found.
     if not chunks:
-        return {"sources": [], **reply_update("I don't know")}
+        return {"sources": [], **reply_update(DONT_KNOW)}
 
-    # 5. Collect unique source document names.
+    # Collect unique source document names.
     sources = list(dict.fromkeys(str(chunk["source"]) for chunk in chunks))
 
-    # 6. Prepare the retrieved passages for the LLM.
+    # Prepare the retrieved passages for the LLM.
     passages = "\n\n".join(f"Source: {chunk['source']}\n{chunk['content']}" for chunk in chunks)
 
     messages: list[AnyMessage] = [
-        SystemMessage(
-            content=(
-                "You are a clinic front-desk assistant. "
-                "Answer the patient's question using ONLY the clinic "
-                "document passages provided. Do not use outside knowledge "
-                "or invent information. If the passages do not contain "
-                "enough information, say that you don't know. "
-                "Give a clear and simple answer."
-            )
-        ),
+        SystemMessage(content=ANSWER_DOCS_SYSTEM_PROMPT),
         HumanMessage(
             content=(
                 f"Patient question:\n{question}\n\nRetrieved clinic document passages:\n{passages}"
@@ -71,10 +58,16 @@ async def answer_from_docs(
         ),
     ]
 
-    # 7. Ask the LLM to generate an answer.
-    answer = await llm.complete(messages)
+    # Generate an answer using only the retrieved passages.
+    answer = (await llm.complete(messages)).strip()
 
-    # 8. Include the source names in the final answer and graph state.
-    answer = f"{answer.strip()}\n\nSource: {', '.join(sources)}"
+    # If the LLM does not know, do not attach a potentially misleading source.
+    normalized_answer = answer.rstrip(".!?").strip().casefold()
+
+    if normalized_answer == DONT_KNOW.casefold():
+        return {"sources": [], **reply_update(DONT_KNOW)}
+
+    # Include source names in the answer and graph state.
+    answer = f"{answer}\n\nSource: {', '.join(sources)}"
 
     return {"sources": sources, **reply_update(answer)}
