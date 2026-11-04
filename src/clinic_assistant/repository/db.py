@@ -9,16 +9,21 @@ from clinic_assistant.config import Settings
 type DictPool = AsyncConnectionPool[AsyncConnection[DictRow]]
 
 
+def conninfo(settings: Settings) -> str:
+    """The PostgreSQL connection string for these settings."""
+    return make_conninfo(
+        host=settings.postgres_host,
+        port=settings.postgres_port,
+        dbname=settings.postgres_db,
+        user=settings.postgres_user,
+        password=settings.postgres_password.get_secret_value(),
+    )
+
+
 def create_pool(settings: Settings) -> DictPool:
     """Create the PostgreSQL asynchronous connection pool."""
     return AsyncConnectionPool(
-        conninfo=make_conninfo(
-            host=settings.postgres_host,
-            port=settings.postgres_port,
-            dbname=settings.postgres_db,
-            user=settings.postgres_user,
-            password=settings.postgres_password.get_secret_value(),
-        ),
+        conninfo=conninfo(settings),
         connection_class=AsyncConnection[DictRow],
         kwargs={
             "autocommit": True,
