@@ -7,8 +7,9 @@ FROM python:3.14-slim
 COPY --from=ghcr.io/astral-sh/uv:0.12.23 /uv /uvx /bin/
 
 # Run as a non-root user: if the app is compromised, the attacker is not root.
-# Created before the copies so COPY --chown can hand files to it directly. A later
-# `chown -R` would rewrite every file into a new layer and store all of them twice.
+# Everything under /app stays owned by root, so the app can read and run its files
+# but cannot change them. Nothing writes there at runtime: logs go to stdout and data
+# to PostgreSQL. Nothing is re-owned, so no `chown` layer duplicates any files.
 RUN useradd --create-home --uid 1000 appuser
 
 WORKDIR /app
@@ -16,14 +17,15 @@ WORKDIR /app
 # Dependencies first, in their own layer. They change only when uv.lock changes,
 # so editing source code does not reinstall every package.
 # --frozen: fail if uv.lock is out of date, rather than silently resolving something else.
-COPY --chown=appuser:appuser pyproject.toml uv.lock README.md ./
+COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --frozen --no-dev --no-install-project
 
 # Then the application itself.
-COPY --chown=appuser:appuser src/ ./src/
+COPY src/ ./src/
 RUN uv sync --frozen --no-dev
 
-# .venv stays root-owned: appuser can read and run it but cannot modify installed packages.
+# Switch only now: the copies and installs above ran as root, so /app, including .venv,
+# is root-owned and read-only for appuser.
 USER appuser
 
 # Put the virtualenv first on PATH so `uvicorn` is the one uv installed.
