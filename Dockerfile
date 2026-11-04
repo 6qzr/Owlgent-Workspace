@@ -6,20 +6,24 @@ FROM python:3.14-slim
 # for a rollback (ADR 0009) would no longer give the same image. Matches the team's uv.
 COPY --from=ghcr.io/astral-sh/uv:0.12.23 /uv /uvx /bin/
 
+# Run as a non-root user: if the app is compromised, the attacker is not root.
+# Created before the copies so COPY --chown can hand files to it directly. A later
+# `chown -R` would rewrite every file into a new layer and store all of them twice.
+RUN useradd --create-home --uid 1000 appuser
+
 WORKDIR /app
 
 # Dependencies first, in their own layer. They change only when uv.lock changes,
 # so editing source code does not reinstall every package.
 # --frozen: fail if uv.lock is out of date, rather than silently resolving something else.
-COPY pyproject.toml uv.lock README.md ./
+COPY --chown=appuser:appuser pyproject.toml uv.lock README.md ./
 RUN uv sync --frozen --no-dev --no-install-project
 
 # Then the application itself.
-COPY src/ ./src/
+COPY --chown=appuser:appuser src/ ./src/
 RUN uv sync --frozen --no-dev
 
-# Run as a non-root user: if the app is compromised, the attacker is not root.
-RUN useradd --create-home --uid 1000 appuser && chown -R appuser:appuser /app
+# .venv stays root-owned: appuser can read and run it but cannot modify installed packages.
 USER appuser
 
 # Put the virtualenv first on PATH so `uvicorn` is the one uv installed.
