@@ -85,14 +85,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # Exactly what a fresh clone does: copy the example env, add a key, one command.
+      # Exactly what a fresh clone does: copy the example env, pick a provider, one command.
+      # The fake provider: CI never calls a real LLM (AGENTS.md), so the smoke test can chat.
       - name: Prepare .env
         run: |
           cp .env.example .env
-          sed -i 's/^OPENAI_API_KEY=.*/OPENAI_API_KEY=ci-fake-key/' .env
+          # Appended, so the later value wins whatever the example says. The leading newline
+          # matters: .env.example has none at the end, and a bare echo would join two lines.
+          printf '\nLLM_PROVIDER=fake\n' >> .env
       - name: Build and start the stack
         run: docker compose up -d --build --wait --wait-timeout 180
       - run: docker compose ps
+      - name: Smoke test
+        run: bash scripts/smoke.sh
+        env:
+          SMOKE_EMERGENCY: "1"  # a throwaway stack, so the staff flag it stores is harmless
       - name: Logs on failure
         if: failure()
         run: docker compose logs
