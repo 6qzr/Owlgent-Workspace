@@ -137,12 +137,11 @@ class ApprovalsRepository:
 
             row = await cur.fetchone()
 
+            # Return None if approval does not exist.
             if row is None:
                 return None
 
             return dict(row)
-
-            # Find a confirmed booking owned by this conversation.
 
     async def find_cancellable_booking(
         self,

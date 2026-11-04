@@ -8,24 +8,13 @@ from uuid import UUID
 from langchain_core.runnables import RunnableConfig
 
 from clinic_assistant.agent.nodes import CLARIFYING, Update, reply_update
+from clinic_assistant.agent.nodes.approval import get_repository
 from clinic_assistant.agent.state import ConversationState
 from clinic_assistant.domain import ApprovalAction
-from clinic_assistant.repository.approvals import ApprovalsRepository
 
 NOT_FOUND = "I couldn't find a booking with that number in this conversation."
 
 MISSING_BOOKING_ID = "Please provide the booking number you want to cancel."
-
-
-def get_repository(config: RunnableConfig) -> ApprovalsRepository:
-    """Get the approval repository injected by the graph."""
-
-    repository = config.get("configurable", {}).get("approval_repository")
-
-    if not isinstance(repository, ApprovalsRepository):
-        raise RuntimeError("Approval repository is not configured")
-
-    return repository
 
 
 async def prepare_cancel(
