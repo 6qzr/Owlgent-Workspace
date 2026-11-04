@@ -51,14 +51,21 @@ Each member records how they actually worked: tools, a real example, and what th
 
 ### @MohammedAlkahali (R1: checkpointer, conversations, Docker, release)
 
-- **Tool:**
-- **Planning:**
-- **Code:**
-- **Reviews:**
-- **Verification:**
-- **Understanding (one real question you asked, and the answer):**
-- **Still learning:**
+- **Tool:** Claude Code in VS Code with the GitHub MCP server, plus Claude in the browser with GitHub and Slack connected. I use the browser one as a second pair of eyes on the plan and the diff before Claude Code writes anything.
+  
+- **Planning:** for every step of #10 I asked for a plan with no code, then had it checked against the current `main` first. That caught two things that would have turned the PR red: `compose.yaml` had no `POSTGRES_HOST`, so the API would have connected to itself once the pool opened (#66); and the CI `test` job only exported `DATABASE_URL`, while `Settings` requires `POSTGRES_USER/PASSWORD/DB` with no defaults and CI has no `.env` (fixed in #71). Both were found before any code existed.
+  
+- **Code:** one step per PR, committed in logical chunks rather than one lump — #71 is four commits (CI env, pool typing, checkpointer, lifespan) and #77 is two. #61 Dockerfile and compose, #66 `POSTGRES_HOST`, #71 checkpointer, #73 conversation service, #77 routes, #81 smoke script.
+  
+- **Reviews:** #62, #64, #74, #75, #76, #85, #86. On #86 I didn't take the risk description on trust — I ran the serializer with `LANGGRAPH_STRICT_MSGPACK=true` and confirmed `Intent.CANCEL` comes back as the plain string `'cancel'`, so `is Intent.CANCEL` is False while `== Intent.CANCEL` is True. On #75 and #76 I found three slices each inventing their own `app.state` key, two of which didn't work, and proposed reading everything from `app.state.runtime`; the team adopted it in #78.
+  
+- **Verification:** I run ruff, mypy and pytest myself and read the output rather than accepting "tests pass". When the smoke script was first checked with a jq stand-in instead of real jq, I installed jq and re-ran it before pushing. I ran the first fresh-clone M1 test and reported two traps on #6: `.env.example` gives an unhealthy container unless you set `LLM_PROVIDER=fake`, and the fixed compose project name means a new clone reuses the old volume so the seed never runs — `docker compose down -v` is mandatory.
+  
+- **Understanding (one real question you asked, and the answer):** *"Why does the conversation survive `docker compose restart api` but not `docker compose down -v`?"*. Because state is checkpointed into PostgreSQL after every step under `thread_id = conversation_id`, and PostgreSQL's data lives in the named volume. `restart` replaces only the API container, so the checkpoint rows are untouched and the next message loads the full history; `down -v` deletes the volume and the checkpoint tables go with it. With `InMemorySaver` even `restart` would lose everything, because the state would live inside the API process.
+  
+- **Still learning:** the `interrupt`/resume internals behind the approval flow (#16, #17), and RAG retrieval once #13 lands.
 
+  
 ### @baraah34 (R2: approvals, slots, cancel)
 
 - **Tool:**
