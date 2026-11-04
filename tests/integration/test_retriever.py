@@ -2,9 +2,13 @@
 
 from uuid import uuid4
 
+import pytest
+
 from clinic_assistant.kb.retriever import Retriever
 from clinic_assistant.repository.db import DictPool
 
+
+pytestmark = pytest.mark.integration
 
 async def test_search_returns_matching_documents(pool: DictPool) -> None:
     """Return document chunks matching the patient's question."""
