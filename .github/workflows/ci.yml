@@ -90,7 +90,9 @@ jobs:
       - name: Prepare .env
         run: |
           cp .env.example .env
-          echo "LLM_PROVIDER=fake" >> .env  # appended: the later value wins, whatever the example says
+          # Appended, so the later value wins whatever the example says. The leading newline
+          # matters: .env.example has none at the end, and a bare echo would join two lines.
+          printf '\nLLM_PROVIDER=fake\n' >> .env
       - name: Build and start the stack
         run: docker compose up -d --build --wait --wait-timeout 180
       - run: docker compose ps
