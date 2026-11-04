@@ -5,10 +5,12 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import InMemorySaver
 
 from clinic_assistant.agent.graph import build_graph
+from clinic_assistant.agent.nodes.cancel import NOT_FOUND
 from clinic_assistant.agent.nodes.classify import Classification
 from clinic_assistant.agent.routing import (
     INTENT_TO_NODE,
     route_after_booking,
+    route_after_cancel,
     route_after_safety,
 )
 from clinic_assistant.agent.state import ConversationState, PendingAction
@@ -73,3 +75,26 @@ def test_same_day_booking_waits_for_staff() -> None:
 
     assert route_after_booking({"messages": [], "pending_action": pending}) == "record_approval"
     assert route_after_booking({"messages": []}) == "confirm_booking"
+
+
+def test_an_old_pending_action_does_not_reroute_a_new_turn() -> None:
+    """prepare_* write None when nothing waits, so the route ignores an earlier turn's value."""
+    assert route_after_booking({"messages": [], "pending_action": None}) == "confirm_booking"
+
+
+def test_found_cancellation_waits_for_staff() -> None:
+    pending = PendingAction(action=ApprovalAction.CANCEL, booking_id=7)
+
+    assert route_after_cancel({"messages": [], "pending_action": pending}) == "record_approval"
+    assert route_after_cancel({"messages": [], "pending_action": None}) == "__end__"
+
+
+async def test_cancel_without_a_found_booking_ends_with_a_reply() -> None:
+    llm = FakeLLM([Classification(intent=Intent.CANCEL, confidence=0.9, booking_id=99)])
+    graph = build_graph(llm, checkpointer=InMemorySaver())
+    config: RunnableConfig = {"configurable": {"thread_id": "cancel-1"}}
+
+    result = await graph.ainvoke({"messages": [HumanMessage("Cancel booking 99")]}, config)
+
+    assert result["reply"] == NOT_FOUND
+    assert (await graph.aget_state(config)).next == ()  # not paused: nothing to approve

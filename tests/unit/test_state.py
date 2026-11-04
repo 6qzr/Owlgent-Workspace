@@ -30,4 +30,4 @@ def test_nodes_can_return_a_partial_update() -> None:
         "pending_action": PendingAction(action=ApprovalAction.CANCEL, booking_id=7),
     }
 
-    assert update["pending_action"]["action"] == "cancel"
+    assert update["pending_action"] == {"action": "cancel", "booking_id": 7}

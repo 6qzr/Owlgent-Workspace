@@ -18,6 +18,9 @@ Return the patient's intent for their LATEST message, using the conversation for
 - other: anything else, including requests for a diagnosis or treatment advice
 
 Also return a confidence between 0 and 1, and any details the patient gave:
-doctor_name, specialty, booking_day (as the patient said it, e.g. "Thursday"), booking_id.
+doctor_name, specialty, booking_day (as the patient said it, e.g. "Thursday"), booking_id,
+patient_name, patient_phone, and slot_choice (the number of the offered slot the patient picked,
+e.g. "book number 2" -> 2).
+For a booking, also include details the patient gave in earlier messages of the same request.
 Leave a detail empty when the patient did not give it. Never invent details.
 """

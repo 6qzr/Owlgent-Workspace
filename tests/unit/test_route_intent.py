@@ -18,10 +18,14 @@ from clinic_assistant.llm import FakeLLM
 COMPLETE: dict[Intent, Entities] = {
     Intent.QUESTION: {},
     Intent.FIND_SLOTS: {"specialty": "Dentistry"},
-    Intent.BOOK: {"doctor_name": "Dr. Sara", "booking_day": "Thursday"},
+    Intent.BOOK: {"slot_choice": 2, "patient_name": "Sara Ali", "patient_phone": "91234567"},
     Intent.CANCEL: {},
     Intent.OTHER: {},
 }
+
+
+# Three slots find_slots offered earlier in the conversation.
+OFFERED = [11, 12, 13]
 
 
 def state(
@@ -33,6 +37,7 @@ def state(
         "intent": intent,
         "confidence": confidence,
         "entities": entities if entities is not None else COMPLETE.get(intent, {}),
+        "slots_offered": OFFERED,
     }
 
 
@@ -68,15 +73,34 @@ def test_missing_intent_asks_for_clarification() -> None:
     assert route_intent({"messages": []}) == "clarify"
 
 
-def test_booking_without_a_day_asks_for_it() -> None:
-    s = state(Intent.BOOK, entities={"specialty": "Dentistry"})
+def test_booking_without_a_phone_asks_for_it() -> None:
+    s = state(Intent.BOOK, entities={"slot_choice": 1, "patient_name": "Sara Ali"})
 
-    assert missing_details(s) == ["day"]
+    assert missing_details(s) == ["phone number"]
     assert route_intent(s) == "clarify"
 
 
-def test_booking_with_nothing_asks_for_both() -> None:
-    assert missing_details(state(Intent.BOOK, entities={})) == ["doctor or specialty", "day"]
+def test_booking_with_nothing_asks_for_everything() -> None:
+    assert missing_details(state(Intent.BOOK, entities={})) == [
+        "number of a slot from the list of free times",
+        "name",
+        "phone number",
+    ]
+
+
+@pytest.mark.parametrize("choice", [0, 4])
+def test_a_slot_number_outside_the_offer_is_asked_again(choice: int) -> None:
+    entities: Entities = {**COMPLETE[Intent.BOOK], "slot_choice": choice}
+
+    assert missing_details(state(Intent.BOOK, entities=entities)) == [
+        "number of a slot from the list of free times"
+    ]
+
+
+def test_booking_before_any_slots_were_offered_asks_for_a_slot() -> None:
+    s: ConversationState = {**state(Intent.BOOK), "slots_offered": []}
+
+    assert missing_details(s) == ["number of a slot from the list of free times"]
 
 
 def test_find_slots_needs_a_doctor_or_specialty_but_not_a_day() -> None:
@@ -85,15 +109,18 @@ def test_find_slots_needs_a_doctor_or_specialty_but_not_a_day() -> None:
 
 
 async def test_clarify_names_exactly_what_is_missing() -> None:
-    update = await clarify(state(Intent.BOOK, entities={"specialty": "Dentistry"}))
+    update = await clarify(state(Intent.BOOK, entities={"slot_choice": 2}))
 
-    assert update["reply"] == "To book, please tell me the day."
+    assert update["reply"] == "To book, please tell me the name and the phone number."
 
 
-async def test_clarify_asks_for_both_details() -> None:
+async def test_clarify_asks_for_every_missing_detail() -> None:
     update = await clarify(state(Intent.BOOK, entities={}))
 
-    assert update["reply"] == "To book, please tell me the doctor or specialty and the day."
+    assert update["reply"] == (
+        "To book, please tell me the number of a slot from the list of free times"
+        " and the name and the phone number."
+    )
 
 
 async def test_clarify_asks_to_rephrase_when_nothing_specific_is_missing() -> None:
@@ -120,15 +147,18 @@ async def test_two_clarifying_turns_in_a_row_are_both_marked() -> None:
     llm = FakeLLM(
         [
             Classification(intent=Intent.BOOK, confidence=0.9),
-            Classification(intent=Intent.BOOK, confidence=0.9, specialty="Dentistry"),
+            Classification(intent=Intent.BOOK, confidence=0.9, patient_name="Sara Ali"),
         ]
     )
     graph = build_graph(llm, checkpointer=InMemorySaver())
     config: RunnableConfig = {"configurable": {"thread_id": "clarify-twice"}}
 
     await graph.ainvoke({"messages": [HumanMessage("I want to book")]}, config)
-    result = await graph.ainvoke({"messages": [HumanMessage("A dentist")]}, config)
+    result = await graph.ainvoke({"messages": [HumanMessage("I'm Sara Ali")]}, config)
 
     replies = [m for m in result["messages"] if isinstance(m, AIMessage)]
     assert [reply_kind(m) for m in replies] == [CLARIFYING, CLARIFYING]
-    assert replies[-1].text == "To book, please tell me the day."
+    assert replies[-1].text == (
+        "To book, please tell me the number of a slot from the list of free times"
+        " and the phone number."
+    )
