@@ -1,8 +1,16 @@
 # Builds the API image. Used by compose locally, in CI (compose-up) and on the VM.
 FROM python:3.14-slim
 
-# uv comes from its own published image: no pip, and the version is explicit.
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+# uv comes from its own published image: no pip. Pinned, never `latest`: `latest` can
+# point to a different uv between two builds of the same tag, so rebuilding an old tag
+# for a rollback (ADR 0009) would no longer give the same image. Matches the team's uv.
+COPY --from=ghcr.io/astral-sh/uv:0.12.23 /uv /uvx /bin/
+
+# Run as a non-root user: if the app is compromised, the attacker is not root.
+# Everything under /app stays owned by root, so the app can read and run its files
+# but cannot change them. Nothing writes there at runtime: logs go to stdout and data
+# to PostgreSQL. Nothing is re-owned, so no `chown` layer duplicates any files.
+RUN useradd --create-home --uid 1000 appuser
 
 WORKDIR /app
 
@@ -16,8 +24,8 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY src/ ./src/
 RUN uv sync --frozen --no-dev
 
-# Run as a non-root user: if the app is compromised, the attacker is not root.
-RUN useradd --create-home --uid 1000 appuser && chown -R appuser:appuser /app
+# Switch only now: the copies and installs above ran as root, so /app, including .venv,
+# is root-owned and read-only for appuser.
 USER appuser
 
 # Put the virtualenv first on PATH so `uvicorn` is the one uv installed.
