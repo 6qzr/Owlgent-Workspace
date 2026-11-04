@@ -1,0 +1,32 @@
+# Keep the build context to what the Dockerfile copies: pyproject.toml, uv.lock,
+# README.md and src/. Everything else stays on the host.
+
+# Secrets never enter the build. The example file is harmless and stays.
+.env
+.env.*
+!.env.example
+
+# Local environments, VCS and tool caches.
+.venv/
+.git/
+.drafts/
+**/__pycache__/
+**/*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.vscode/
+
+# Coverage output.
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Not used by the image.
+tests/
+docs/
+experiments/
+scripts/
+.github/
+m1-test/
