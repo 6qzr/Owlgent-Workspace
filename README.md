@@ -91,7 +91,80 @@ Keep PRs to one task and under about 400 changed lines. Merge at least once per 
 
 ## Deploy and roll back (Ubuntu Server VM)
 
-> Completed by the release story. Deploy = check out the release tag, then run `docker compose up -d --build`. Roll back = check out the previous tag and run the same command.
+The VM builds and runs the **tagged source** with Docker Compose. There is no image registry (ADR 0009). Any team member can follow these steps.
+
+### 1. Prepare the VM (once)
+
+**VirtualBox:** Ubuntu Server LTS, 2 vCPU, 4 GB RAM, 20 GB disk. Networking: NAT with port forwarding **host 8000 → guest 8000** (API) and **host 2222 → guest 22** (SSH), or a bridged adapter.
+
+**Docker Engine and tools** (from [Docker's Ubuntu guide](https://docs.docker.com/engine/install/ubuntu/)):
+
+```bash
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl git jq
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+  | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+```
+
+`jq` is needed by `scripts/smoke.sh`.
+
+**A deploy user that is not root:**
+
+```bash
+sudo adduser --disabled-password --gecos "" deploy
+sudo usermod -aG docker deploy      # run docker without sudo; log in again to apply
+sudo install -d -o deploy -g deploy /opt/clinic-assistant
+```
+
+**The code and its secrets**, as `deploy`:
+
+```bash
+sudo -iu deploy
+git clone https://github.com/6qzr/Owlgent-Workspace.git /opt/clinic-assistant
+cd /opt/clinic-assistant
+cp .env.example .env
+chmod 600 .env                      # only deploy can read the secrets
+nano .env                           # set OPENAI_API_KEY and a strong POSTGRES_PASSWORD
+```
+
+Set `POSTGRES_PASSWORD` **before the first start**. PostgreSQL stores it in the volume on the first start, and changing `.env` later does not change it.
+
+### 2. Deploy a release
+
+```bash
+cd /opt/clinic-assistant
+git fetch --tags
+git checkout v0.1.0                 # the release tag, never a branch
+docker compose up -d --build --wait # rebuilds the image from this tag; waits until healthy
+docker compose ps                   # api and db: "healthy"
+bash scripts/smoke.sh               # exit 0: "All … smoke steps passed."
+```
+
+From the host machine, the API answers at `http://localhost:8000/health` (NAT forwarding) or at `http://<vm-ip>:8000/health` (bridged).
+
+`git describe --tags` shows which release is running.
+
+### 3. Roll back
+
+Check out the **previous** tag and run the same commands:
+
+```bash
+git tag --sort=-creatordate         # newest first: pick the one before the running tag
+git checkout <previous-tag>
+docker compose up -d --build --wait
+bash scripts/smoke.sh
+```
+
+Roll forward again the same way with the newer tag. To rehearse a rollback, there must already be an earlier tag on `main` to go back to.
+
+- The `pgdata` volume is **kept** across deploys and rollbacks, so conversations, bookings and approvals survive.
+- `db/*.sql` runs **only on the first start** (empty volume). A release that changes the schema needs a migration plan before it can be rolled back. `v0.1.0` has none.
+- **Never run `docker compose down -v` on the VM.** `-v` deletes the database volume and every conversation with it.
 
 ## Known limitations
 
