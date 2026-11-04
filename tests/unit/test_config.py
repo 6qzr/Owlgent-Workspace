@@ -5,11 +5,21 @@ from pydantic import SecretStr, ValidationError
 
 from clinic_assistant.config import Settings
 
-DB = {"postgres_user": "clinic", "postgres_password": SecretStr("clinic"), "postgres_db": "clinic"}
+DB = {
+    "postgres_user": "clinic",
+    "postgres_password": SecretStr("clinic"),
+    "postgres_db": "clinic",
+}
+
+
+@pytest.fixture(autouse=True)
+def clear_llm_provider_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Prevent shell environment variables from affecting settings tests."""
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
 
 
 def settings(**overrides: object) -> Settings:
-    """Settings from explicit values only; model_validate skips .env and environment sources."""
+    """Create settings from explicit values only."""
     return Settings.model_validate({"openai_api_key": None, **DB, **overrides})
 
 
