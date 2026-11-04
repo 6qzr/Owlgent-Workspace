@@ -15,6 +15,7 @@ pytestmark = pytest.mark.integration
 async def test_own_confirmed_booking_is_found(
     pool: DictPool, confirmed_booking: SeededBooking
 ) -> None:
+    """A confirmed booking in its own conversation is found."""
     found = await ApprovalsRepository(pool).find_cancellable_booking(
         confirmed_booking.booking_id, confirmed_booking.conversation_id
     )
@@ -26,6 +27,7 @@ async def test_own_confirmed_booking_is_found(
 async def test_another_conversations_booking_is_not_found(
     pool: DictPool, confirmed_booking: SeededBooking
 ) -> None:
+    """Another conversation can't see, and so can't cancel, the booking."""
     repository = ApprovalsRepository(pool)
 
     assert await repository.find_cancellable_booking(confirmed_booking.booking_id, uuid4()) is None
@@ -34,6 +36,7 @@ async def test_another_conversations_booking_is_not_found(
 async def test_a_cancelled_booking_is_not_found(
     pool: DictPool, confirmed_booking: SeededBooking
 ) -> None:
+    """A booking that is already cancelled can't be cancelled again."""
     async with pool.connection() as conn:
         await conn.execute(
             "UPDATE bookings SET status = 'cancelled' WHERE id = %s",

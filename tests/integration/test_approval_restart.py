@@ -44,7 +44,10 @@ async def test_pending_cancel_approval_survives_restart(
 
     The fixture's own pool only seeds and cleans up; the "app" is the two pools below.
     """
-    booking_id, conversation_id, slot_id, doctor_id = confirmed_booking
+    booking_id = confirmed_booking.booking_id
+    conversation_id = confirmed_booking.conversation_id
+    slot_id = confirmed_booking.slot_id
+    doctor_id = confirmed_booking.doctor_id
 
     # -----------------------------------------
     # PART 1: BEFORE THE APPLICATION RESTART
