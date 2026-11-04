@@ -62,6 +62,7 @@ async def test_load_documents_into_database(
             )
             result = await cursor.fetchone()
 
+        assert result is not None
         assert result["total"] == 2
 
         # Update the document and run the loader again.
@@ -83,8 +84,8 @@ async def test_load_documents_into_database(
             )
             updated_row = await cursor.fetchone()
 
+        assert updated_row is not None
         assert updated_row["content"] == "Updated first paragraph."
-
     finally:
         # Remove test records from PostgreSQL.
         async with pool.connection() as conn:
