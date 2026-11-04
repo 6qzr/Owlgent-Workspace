@@ -25,3 +25,6 @@
 
 ## Git
 Follow the contribution guidelines in `README.md`. Commits and PRs carry only the human author's identity.
+
+## Working with AI tools
+Plan before code, one small step at a time, and explain every change back before merging. See `docs/ai-workflow.md`.
