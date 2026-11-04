@@ -165,36 +165,30 @@ async def test_pending_cancel_approval_survives_restart(
             first_saver = await open_checkpointer(first_pool)
             first_approvals = ApprovalsRepository(first_pool)
 
-            # FakeLLM will classify the message as CANCEL.
-            # The booking ID is set after creating the booking.
-            first_llm = FakeLLM()
-            first_graph = build_graph(
-                first_llm,
-                first_saver,
-                Repositories(approvals=first_approvals),
-            )
+            # Create the conversation directly in PostgreSQL.
+            # No graph is needed to insert a conversation.
+            conversation_id = uuid4()
 
-            first_conversations = ConversationService(
-                first_graph,
-                first_pool,
-            )
+            async with first_pool.connection() as conn:
+                await conn.execute(
+                    "INSERT INTO conversations (id) VALUES (%s)",
+                    (conversation_id,),
+                )
 
-            # Create a conversation saved in PostgreSQL.
-            conversation_id = await first_conversations.create_conversation()
-
-            # Create its confirmed test booking.
+            # Create a confirmed booking for this conversation.
             booking_id, slot_id, doctor_id = await create_confirmed_booking(
                 first_pool,
                 conversation_id,
             )
 
-            # Build a graph with a scripted cancellation intent.
+            # FakeLLM classifies the patient's request as cancellation.
             classification = Classification(
                 intent=Intent.CANCEL,
                 confidence=0.99,
                 booking_id=booking_id,
             )
 
+            # Build one graph and one service for the cancellation.
             first_graph = build_graph(
                 FakeLLM([classification]),
                 first_saver,
@@ -206,19 +200,19 @@ async def test_pending_cancel_approval_survives_restart(
                 first_pool,
             )
 
-            # Patient asks to cancel their own booking.
+            # Patient requests cancellation of their own booking.
             turn = await first_conversations.send_message(
                 conversation_id,
                 f"Cancel booking {booking_id}",
             )
 
-            # The conversation must pause for staff.
+            # The workflow must pause for staff approval.
             assert turn.status == TurnStatus.AWAITING_APPROVAL
             assert turn.approval_id is not None
 
             approval_id = turn.approval_id
 
-            # Check the pending approval is stored in PostgreSQL.
+            # Verify pending approval is stored in PostgreSQL.
             pending = await first_approvals.get_by_id(approval_id)
 
             assert pending is not None
@@ -227,13 +221,13 @@ async def test_pending_cancel_approval_survives_restart(
             assert pending["booking_id"] == booking_id
             assert pending["conversation_id"] == conversation_id
 
-            # Check LangGraph is really interrupted.
+            # Verify LangGraph is paused.
             saved = await first_graph.aget_state(thread_config(conversation_id))
 
             assert saved.next
             assert saved.values["approval_id"] == approval_id
 
-            # The booking must not be cancelled yet.
+            # The booking must remain confirmed before approval.
             async with first_pool.connection() as conn:
                 cursor = await conn.execute(
                     "SELECT status FROM bookings WHERE id = %s",
@@ -245,7 +239,7 @@ async def test_pending_cancel_approval_survives_restart(
             assert before["status"] == "confirmed"
 
         finally:
-            # Simulate the application shutting down.
+            # Close the old pool to simulate application shutdown.
             await first_pool.close()
 
         # -----------------------------------------
@@ -255,7 +249,7 @@ async def test_pending_cancel_approval_survives_restart(
         second_pool = await open_pool(settings)
 
         try:
-            # New pool, new checkpointer, new repository, new graph.
+            # Create a new pool, checkpointer, repository, and graph.
             second_saver = await open_checkpointer(second_pool)
             second_approvals = ApprovalsRepository(second_pool)
 
@@ -265,19 +259,19 @@ async def test_pending_cancel_approval_survives_restart(
                 Repositories(approvals=second_approvals),
             )
 
-            # The checkpoint must still be paused.
+            # Recover the paused state using the same conversation ID.
             restored = await second_graph.aget_state(thread_config(conversation_id))
 
             assert restored.next
             assert restored.values["approval_id"] == approval_id
 
-            # The pending approval must survive the restart too.
+            # Verify approval is still pending after restart.
             pending_after_restart = await second_approvals.get_by_id(approval_id)
 
             assert pending_after_restart is not None
             assert pending_after_restart["status"] == "pending"
 
-            # Staff approves using the existing ApprovalService.
+            # Staff approves the pending cancellation.
             approval_service = ApprovalService(
                 second_approvals,
                 second_graph,
@@ -290,10 +284,10 @@ async def test_pending_cancel_approval_survives_restart(
                 staff="Test Receptionist",
             )
 
-            # Patient receives the approval outcome.
+            # Verify the patient receives the approval outcome.
             assert result["outcome"] == "Your request was approved."
 
-            # Verify the final database records.
+            # Verify the booking is now cancelled.
             async with second_pool.connection() as conn:
                 cursor = await conn.execute(
                     "SELECT status FROM bookings WHERE id = %s",
@@ -304,17 +298,18 @@ async def test_pending_cancel_approval_survives_restart(
             assert booking_after is not None
             assert booking_after["status"] == "cancelled"
 
+            # Verify the approval record was updated.
             final_approval = await second_approvals.get_by_id(approval_id)
 
             assert final_approval is not None
             assert final_approval["status"] == "approved"
 
-            # The cancelled appointment must be free again.
+            # Verify the cancelled appointment slot is available again.
             free_slots = await SlotsRepository(second_pool).find_free_slots(doctor_id=doctor_id)
 
             assert any(slot["id"] == slot_id for slot in free_slots)
 
-            # The patient's conversation history contains the result.
+            # Verify the patient's conversation contains the outcome.
             second_conversations = ConversationService(
                 second_graph,
                 second_pool,
@@ -327,7 +322,7 @@ async def test_pending_cancel_approval_survives_restart(
                 for message in history.messages
             )
 
-            # The graph has finished; no longer waiting for staff.
+            # The graph must finish after the staff decision.
             final_state = await second_graph.aget_state(thread_config(conversation_id))
 
             assert final_state.next == ()
@@ -336,6 +331,7 @@ async def test_pending_cancel_approval_survives_restart(
             await second_pool.close()
 
     finally:
+        # Clean up test clinic records.
         await cleanup_test_data(
             settings,
             conversation_id,
