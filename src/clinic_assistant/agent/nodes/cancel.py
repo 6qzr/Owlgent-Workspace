@@ -7,8 +7,7 @@ from uuid import UUID
 
 from langchain_core.runnables import RunnableConfig
 
-from clinic_assistant.agent.nodes import CLARIFYING, Update, reply_update
-from clinic_assistant.agent.nodes.approval import get_repository
+from clinic_assistant.agent.nodes import CLARIFYING, Update, get_repository, reply_update
 from clinic_assistant.agent.state import ConversationState
 from clinic_assistant.domain import ApprovalAction
 

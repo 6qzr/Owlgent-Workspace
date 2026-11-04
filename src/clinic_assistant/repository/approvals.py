@@ -137,7 +137,6 @@ class ApprovalsRepository:
 
             row = await cur.fetchone()
 
-            # Return None if approval does not exist.
             if row is None:
                 return None
 
