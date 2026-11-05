@@ -3,6 +3,7 @@
 The PostgreSQL partial unique index prevents double booking.
 """
 
+import asyncio
 from datetime import datetime
 from typing import cast
 from uuid import UUID
@@ -11,6 +12,8 @@ from psycopg.errors import UniqueViolation
 
 from clinic_assistant.domain import BookingStatus
 from clinic_assistant.repository.db import DictPool
+
+DB_TIMEOUT_SECONDS = 5.0
 
 
 class SlotTaken(Exception):
@@ -21,7 +24,6 @@ class BookingsRepository:
     """Create bookings using the shared PostgreSQL pool."""
 
     def __init__(self, pool: DictPool) -> None:
-        # Save the database connection pool.
         self.pool = pool
 
     async def create(
@@ -34,7 +36,6 @@ class BookingsRepository:
     ) -> int:
         """Create a booking and return its database ID."""
 
-        # Insert the booking into PostgreSQL.
         query = """
             INSERT INTO bookings (
                 slot_id,
@@ -48,7 +49,10 @@ class BookingsRepository:
         """
 
         try:
-            async with self.pool.connection() as conn:
+            async with (
+                asyncio.timeout(DB_TIMEOUT_SECONDS),
+                self.pool.connection() as conn,
+            ):
                 cursor = await conn.execute(
                     query,
                     (
@@ -63,14 +67,13 @@ class BookingsRepository:
                 booking = await cursor.fetchone()
 
         except UniqueViolation as exc:
-            # Only a duplicate active booking means SlotTaken.
-            # Other constraint errors must not be hidden.
+            # Only the active-slot unique index means SlotTaken.
+            # Other database constraint errors must not be hidden.
             if exc.diag.constraint_name != "unique_active_booking_per_slot":
                 raise
 
             raise SlotTaken("This appointment slot is already booked.") from exc
 
-        # Make sure PostgreSQL returned a booking ID.
         if booking is None:
             raise RuntimeError("Could not create booking")
 
@@ -86,8 +89,10 @@ class BookingsRepository:
               AND starts_at > CURRENT_TIMESTAMP
         """
 
-        # Find the requested slot in PostgreSQL.
-        async with self.pool.connection() as conn:
+        async with (
+            asyncio.timeout(DB_TIMEOUT_SECONDS),
+            self.pool.connection() as conn,
+        ):
             cursor = await conn.execute(
                 query,
                 (slot_id,),
@@ -95,9 +100,7 @@ class BookingsRepository:
 
             slot = await cursor.fetchone()
 
-        # The slot does not exist or its start time has passed.
         if slot is None:
             return None
 
-        # Cast the database value to datetime for mypy.
         return cast(datetime, slot["starts_at"])

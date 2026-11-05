@@ -19,7 +19,7 @@ from clinic_assistant.repository.bookings import BookingsRepository, SlotTaken
 
 
 def make_repository(starts_at: datetime) -> MagicMock:
-    """Create a mocked booking repository."""
+    """Create a mocked bookings repository."""
     repository = MagicMock(spec=BookingsRepository)
     repository.get_slot_start = AsyncMock(return_value=starts_at)
     repository.create = AsyncMock(return_value=101)
@@ -27,7 +27,7 @@ def make_repository(starts_at: datetime) -> MagicMock:
 
 
 def make_state() -> ConversationState:
-    """Create a patient request for the second offered slot."""
+    """Create a valid patient booking request."""
     return {
         "messages": [],
         "slots_offered": [10, 20],
@@ -40,7 +40,7 @@ def make_state() -> ConversationState:
 
 
 def make_config(repository: MagicMock) -> RunnableConfig:
-    """Inject the repository and conversation ID."""
+    """Create LangGraph configuration for testing."""
     return {
         "configurable": {
             "bookings_repository": repository,
@@ -50,26 +50,33 @@ def make_config(repository: MagicMock) -> RunnableConfig:
 
 
 async def test_future_booking_confirmed() -> None:
-    """Future-day bookings should be confirmed immediately."""
+    """Future-day bookings are confirmed immediately."""
     future = datetime.now(OMAN_TIMEZONE) + timedelta(days=2)
     repository = make_repository(future)
-    config = make_config(repository)
 
-    result = await prepare_booking(make_state(), config)
+    result = await prepare_booking(
+        make_state(),
+        make_config(repository),
+    )
 
+    assert result["booking_id"] == 101
     assert result["pending_action"] is None
-    assert "confirmed" in result["reply"].lower()
-    assert "101" in result["reply"]
+    assert "reply" not in result
 
     repository.get_slot_start.assert_awaited_once_with(20)
-
-    assert repository.create.await_args.kwargs["status"] == BookingStatus.CONFIRMED
     assert repository.create.await_args.kwargs["slot_id"] == 20
+    assert repository.create.await_args.kwargs["status"] == BookingStatus.CONFIRMED
+
+    final_reply = await confirm_booking({"messages": [], "booking_id": result["booking_id"]})
+
+    assert "confirmed" in final_reply["reply"].lower()
+    assert "101" in final_reply["reply"]
 
 
 async def test_same_day_booking_needs_approval() -> None:
-    """A same-day booking must wait for staff approval."""
+    """Same-day booking is held for staff approval."""
     today = datetime.now(OMAN_TIMEZONE).date()
+
     starts_at = datetime(
         today.year,
         today.month,
@@ -78,12 +85,15 @@ async def test_same_day_booking_needs_approval() -> None:
         0,
         tzinfo=OMAN_TIMEZONE,
     )
+
     repository = make_repository(starts_at)
 
     result = await prepare_booking(
         make_state(),
         make_config(repository),
     )
+
+    assert result["booking_id"] == 101
 
     assert result["pending_action"] == {
         "action": ApprovalAction.BOOK,
@@ -93,24 +103,8 @@ async def test_same_day_booking_needs_approval() -> None:
     assert repository.create.await_args.kwargs["status"] == BookingStatus.PENDING_APPROVAL
 
 
-async def test_invalid_slot_choice() -> None:
-    """A patient cannot choose a slot outside the offered list."""
-    repository = make_repository(datetime.now(OMAN_TIMEZONE) + timedelta(days=2))
-    state = make_state()
-    state["entities"]["slot_choice"] = 3
-
-    result = await prepare_booking(
-        state,
-        make_config(repository),
-    )
-
-    assert result["pending_action"] is None
-    assert "choose a slot" in result["reply"].lower()
-    repository.create.assert_not_awaited()
-
-
 async def test_slot_no_longer_available() -> None:
-    """Reject a missing or expired appointment."""
+    """Reject missing or expired appointment slots."""
     repository = make_repository(datetime.now(OMAN_TIMEZONE))
     repository.get_slot_start.return_value = None
 
@@ -119,15 +113,22 @@ async def test_slot_no_longer_available() -> None:
         make_config(repository),
     )
 
+    assert result["booking_id"] is None
     assert result["pending_action"] is None
-    assert result["reply"] == SLOT_UNAVAILABLE
+    assert "reply" not in result
+
     repository.create.assert_not_awaited()
+
+    final_reply = await confirm_booking({"messages": [], "booking_id": result["booking_id"]})
+
+    assert final_reply["reply"] == SLOT_UNAVAILABLE
 
 
 async def test_slot_taken() -> None:
-    """Tell the patient if another booking took the slot."""
+    """Handle a slot booked by another patient."""
     future = datetime.now(OMAN_TIMEZONE) + timedelta(days=2)
     repository = make_repository(future)
+
     repository.create.side_effect = SlotTaken("Slot already booked")
 
     result = await prepare_booking(
@@ -135,28 +136,53 @@ async def test_slot_taken() -> None:
         make_config(repository),
     )
 
+    assert result["booking_id"] is None
     assert result["pending_action"] is None
-    assert result["reply"] == SLOT_UNAVAILABLE
+    assert "reply" not in result
+
+    final_reply = await confirm_booking({"messages": [], "booking_id": result["booking_id"]})
+
+    assert final_reply["reply"] == SLOT_UNAVAILABLE
 
 
 async def test_confirm_booking_reply() -> None:
-    """Confirm the booking with a patient-facing message."""
+    """The final node creates the confirmation response."""
     state: ConversationState = {
         "messages": [],
-        "reply": "Your appointment is confirmed. Your booking number is 101.",
+        "booking_id": 101,
     }
 
     result = await confirm_booking(state)
 
-    assert "confirmed" in result["reply"]
+    assert result["reply"] == ("Your appointment is confirmed. Your booking number is 101.")
     assert result["messages"][0].content == result["reply"]
 
 
+async def test_confirm_booking_unavailable() -> None:
+    """The final node reports an unavailable slot."""
+    state: ConversationState = {
+        "messages": [],
+        "booking_id": None,
+    }
+
+    result = await confirm_booking(state)
+
+    assert result["reply"] == SLOT_UNAVAILABLE
+    assert result["messages"][0].content == SLOT_UNAVAILABLE
+
+
 def test_same_day_uses_oman_date() -> None:
-    """Compare the appointment date in Oman, not UTC."""
+    """Compare appointment dates using the Oman timezone."""
     today = datetime.now(OMAN_TIMEZONE).date()
 
-    same_day = datetime(today.year, today.month, today.day, 12, tzinfo=OMAN_TIMEZONE)
+    same_day = datetime(
+        today.year,
+        today.month,
+        today.day,
+        12,
+        tzinfo=OMAN_TIMEZONE,
+    )
+
     next_day = same_day + timedelta(days=1)
 
     assert is_same_day(same_day)

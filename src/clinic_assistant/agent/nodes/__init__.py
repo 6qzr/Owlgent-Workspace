@@ -1,8 +1,10 @@
 """Graph nodes, one module per slice; each owner replaces the stub body in their own file."""
 
 from typing import Any
+from uuid import UUID
 
 from langchain_core.messages import AIMessage, BaseMessage
+from langchain_core.runnables import RunnableConfig
 
 type Update = dict[str, Any]
 
@@ -19,6 +21,30 @@ def reply_update(text: str, kind: str | None = None) -> Update:
     """
     metadata = {REPLY_KIND: kind} if kind else {}
     return {"reply": text, "messages": [AIMessage(text, response_metadata=metadata)]}
+
+
+def configured[T](
+    config: RunnableConfig,
+    key: str,
+    cls: type[T],
+) -> T:
+    """Return the object graph.py injected under key; fail if missing or invalid."""
+    obj = config.get("configurable", {}).get(key)
+
+    if not isinstance(obj, cls):
+        raise RuntimeError(f"{key} is not configured")
+
+    return obj
+
+
+def conversation_id(config: RunnableConfig) -> UUID:
+    """Return this run's conversation UUID from its thread ID."""
+    thread_id = config.get("configurable", {}).get("thread_id")
+
+    if thread_id is None:
+        raise RuntimeError("Conversation thread ID is missing")
+
+    return UUID(str(thread_id))
 
 
 def reply_kind(message: BaseMessage) -> str | None:
