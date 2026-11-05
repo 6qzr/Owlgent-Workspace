@@ -5,10 +5,7 @@ from datetime import datetime
 from typing import TypedDict
 from uuid import UUID
 
-from clinic_assistant.repository.db import DictPool
-
-# Covers getting a connection and running the query (AGENTS.md: every DB call has a timeout).
-DB_TIMEOUT_SECONDS = 5.0
+from clinic_assistant.repository.db import DB_TIMEOUT_SECONDS, DictPool
 
 
 class EmergencyFlag(TypedDict):
