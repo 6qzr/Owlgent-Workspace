@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     # Conversation history
     max_history_messages: int = Field(default=20, gt=0)
 
+    # Knowledge base retrieval
+    retrieval_threshold: float = Field(default=0.03, ge=0)
+    retrieval_top_k: int = Field(default=3, gt=0)
+
     @model_validator(mode="after")
     def require_key_for_openai(self) -> Self:
         """Fail fast at start-up when the real model is selected without a key."""
