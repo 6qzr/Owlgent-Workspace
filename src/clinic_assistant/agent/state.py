@@ -51,6 +51,8 @@ class ConversationState(TypedDict):
     sources: NotRequired[list[str]]
     # Writer: find_slots (slot ids offered to the patient).
     slots_offered: NotRequired[list[int]]
+    # Writer: prepare_booking, on every run.
+    booking_id: NotRequired[int | None]
     # Writer: prepare_booking / prepare_cancel, on EVERY run (None when nothing waits for staff),
     # so a value from an earlier turn never reroutes this one.
     pending_action: NotRequired[PendingAction | None]
