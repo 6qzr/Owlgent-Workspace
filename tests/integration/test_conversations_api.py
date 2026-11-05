@@ -12,8 +12,9 @@ from clinic_assistant.agent.graph import ConversationGraph, build_graph
 from clinic_assistant.agent.nodes.classify import Classification
 from clinic_assistant.domain import Intent
 from clinic_assistant.llm import FakeLLM
-from clinic_assistant.main import Runtime, create_app
+from clinic_assistant.main import create_app
 from clinic_assistant.repository.db import DictPool
+from clinic_assistant.runtime import Runtime
 
 pytestmark = pytest.mark.integration
 

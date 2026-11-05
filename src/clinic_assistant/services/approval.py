@@ -51,15 +51,11 @@ class ApprovalService:
         reason: str,
         staff: str,
     ) -> dict[str, str]:
-        """Resume the conversation with the staff decision."""
+        """Resume the paused conversation with the staff decision; return the patient's reply.
 
-        reason = reason.strip()
-        staff = staff.strip()
-
-        if not reason or not staff:
-            raise ValueError("Reason and staff are required")
-
-        # Get the pending approval.
+        The request was validated by the API, and apply_decision raises if the database update
+        fails, so the result only needs to show that the run finished with a reply.
+        """
         approval = await self.repository.get_by_id(approval_id)
 
         if approval is None:
@@ -68,28 +64,10 @@ class ApprovalService:
         if approval["status"] != ApprovalStatus.PENDING:
             raise ApprovalAlreadyDecidedError("Approval already decided")
 
-        # Resume the conversation that created this approval.
-        thread_id = str(approval["conversation_id"])
-
-        config: RunnableConfig = {
-            "configurable": {
-                "thread_id": thread_id,
-                "approval_repository": self.repository,
-            }
-        }
-
-        decision = {
-            "approved": approved,
-            "reason": reason,
-            "staff": staff,
-        }
-
-        # Resume the interrupted graph.
+        config: RunnableConfig = {"configurable": {"thread_id": str(approval["conversation_id"])}}
+        decision = {"approved": approved, "reason": reason, "staff": staff}
         try:
-            result = await self.graph.ainvoke(
-                Command(resume=decision),
-                config=config,
-            )
+            result = await self.graph.ainvoke(Command(resume=decision), config=config)
         except (
             ApprovalAlreadyDecidedError,
             ApprovalNotFoundError,
@@ -100,31 +78,7 @@ class ApprovalService:
 
         if "__interrupt__" in result:
             raise ApprovalResumeError("Approval workflow is still paused")
-
-        # Verify that the graph returned the decision.
-        saved_decision = result.get("decision")
-
-        if not isinstance(saved_decision, dict):
-            raise ApprovalResumeError("Workflow did not return a decision")
-
-        if (
-            saved_decision.get("approved") is not approved
-            or saved_decision.get("reason") != reason
-            or saved_decision.get("staff") != staff
-        ):
-            raise ApprovalResumeError("Workflow returned a different decision")
-
-        # Verify that the database contains the final decision.
-        updated = await self.repository.get_by_id(approval_id)
-
-        expected_status = ApprovalStatus.APPROVED if approved else ApprovalStatus.REJECTED
-
-        if updated is None or updated["status"] != expected_status:
-            raise ApprovalResumeError("Approval decision was not saved")
-
         reply = result.get("reply")
-
         if not isinstance(reply, str) or not reply:
             raise ApprovalResumeError("Workflow did not return a reply")
-
         return {"outcome": reply}

@@ -11,7 +11,8 @@ from psycopg_pool import AsyncConnectionPool
 
 from clinic_assistant.agent.graph import build_graph
 from clinic_assistant.llm import FakeLLM
-from clinic_assistant.main import APP_TITLE, Runtime, create_app
+from clinic_assistant.main import APP_TITLE, create_app
+from clinic_assistant.runtime import Runtime
 
 
 class FakeRuntime:
