@@ -142,8 +142,6 @@ class ApprovalsRepository:
 
             return dict(row)
 
-            # Find a confirmed booking owned by this conversation.
-
     async def find_cancellable_booking(
         self,
         booking_id: int,
