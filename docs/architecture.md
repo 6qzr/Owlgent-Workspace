@@ -52,7 +52,8 @@ flowchart LR
 | `llm/` | One async interface: `AsyncOpenAI` implementation + deterministic `FakeLLM` | Tests and CI use the fake only |
 | `kb/` | Load and chunk clinic documents; full-text retrieval | Empty result is not an error |
 | `repository/` | Parameterised SQL through psycopg `AsyncConnectionPool` | No ORM; PostgreSQL only |
-| `config.py` | Settings from environment variables | Fail fast on missing `OPENAI_API_KEY` |
+| `config.py` | Settings from environment variables | Fail fast: `OPENAI_API_KEY` is required when `LLM_PROVIDER=openai` |
+| `runtime.py` + `api/deps.py` | The graph and DB pool opened once at start-up; `get_runtime` hands them to routes | Routes return 503 until start-up finishes |
 
 ## 2. Conversation workflow
 
@@ -93,12 +94,14 @@ interrupted node from its start, so any write inside `await_staff` would happen 
 | `emergency` | `safety_gate` / `emergency_reply` |
 | `sources` | `answer_from_docs` |
 | `slots_offered` | `find_slots` |
-| `pending_action` | `prepare_booking` / `prepare_cancel` |
+| `booking_id` | `prepare_booking`, on every run (`None` when the slot was taken) |
+| `pending_action` | `prepare_booking` / `prepare_cancel`, on every run (`None` when nothing waits for staff) |
 | `approval_id` | `record_approval` |
 | `decision` | resume input → `apply_decision` |
 | `reply` | the last node of each branch |
 
-The checkpoint stores the full history. Only the last `MAX_HISTORY_MESSAGES` (from config) are sent to the model.
+The checkpoint stores the full history. Only the last `CLASSIFY_HISTORY_WINDOW` messages (10, in
+`agent/prompts.py`) are sent to the model.
 
 ## 3. Staff approval across a restart
 
@@ -119,7 +122,7 @@ sequenceDiagram
 
     Note over API,DB: API container restarts. Checkpoint and approvals row stay in PostgreSQL.
 
-    S->>API: GET /approvals?status=pending
+    S->>API: GET /approvals
     API->>DB: select pending approvals
     API-->>S: list with approval_id and conversation_id
     S->>API: POST /approvals/{approval_id}/decision (approve, reason)
@@ -137,14 +140,18 @@ sequenceDiagram
 | `POST /api/v1/conversations` | Start a conversation | 201 `{conversation_id}` | — |
 | `POST /api/v1/conversations/{id}/messages` | Send a message | 200 `{reply, status, sources, approval_id}` | 404, 409 awaiting approval, 422, 502 LLM, 503 DB |
 | `GET /api/v1/conversations/{id}` | History and status | 200 | 404 |
-| `GET /api/v1/doctors?specialty=` | List doctors | 200 | — |
-| `GET /api/v1/slots?doctor_id=&specialty=&date=` | Free slots | 200 | 422 |
-| `GET /api/v1/approvals?status=pending` | Staff queue | 200 | — |
+| `GET /api/v1/slots?doctor_id=&doctor_name=&specialty=&date=` | Free slots (doctor names and specialties come with each slot) | 200 | 422 |
+| `GET /api/v1/approvals` | Staff queue: pending approvals | 200 | — |
 | `POST /api/v1/approvals/{id}/decision` | Approve or reject with reason; resumes the graph | 200 `{outcome}` | 404, 409 already decided, 422 |
 | `GET /api/v1/emergencies` | Flagged emergency messages | 200 | — |
 | `GET /health` | Service and database reachable | 200 | 503 |
 
 `status` in a message reply is one of: `answered`, `clarifying`, `awaiting_approval`, `emergency`.
+
+There is no `/book` or `/cancel` endpoint on purpose. Patients book and cancel by talking
+(`POST .../messages`), so every action passes the safety gate and the approval rules in the
+graph. A separate `GET /doctors` was planned but cut, because the slots endpoint already
+returns each slot's doctor and specialty.
 
 ## 5. Data model
 
@@ -224,8 +231,8 @@ flowchart TB
     end
     lead["6qzr: safety_gate, classify, route_intent, clarify, VM (#11, #12, #56)"]
     r1["MohammedAlkahali: conversations, checkpointer, health, compose, release (#10, #18, #19)"]
-    r2["baraah34: slots, approvals, cancel (#14, #16, #17)"]
-    r3["NoorAlbusaidi: RAG answers, booking, seed data (#13, #15, #55)"]
+    r2["baraah34: slots, approvals, cancel, booking (#14, #16, #17, #15)"]
+    r3["NoorAlbusaidi: RAG answers, seed data (#13, #55)"]
     sk --> lead & r1 & r2 & r3
     sc --> r1 & r2 & r3
 ```
