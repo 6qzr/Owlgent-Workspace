@@ -1,7 +1,5 @@
 """Answer clinic questions from the clinic documents and name the source."""
 
-from typing import cast
-
 from langchain_core.messages import AnyMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 
@@ -30,10 +28,9 @@ async def answer_from_docs(
         return {"sources": [], **reply_update(DONT_KNOW)}
 
     # Get the retriever injected by the graph.
-    configurable = config.get("configurable", {})
-    retriever = cast(Retriever | None, configurable.get("retriever"))
+    retriever = config.get("configurable", {}).get("retriever")
 
-    if retriever is None:
+    if not isinstance(retriever, Retriever):
         raise RuntimeError("Document retriever is not configured")
 
     # Search the clinic documents.
