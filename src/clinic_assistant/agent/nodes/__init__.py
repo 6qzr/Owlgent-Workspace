@@ -23,27 +23,19 @@ def reply_update(text: str, kind: str | None = None) -> Update:
     return {"reply": text, "messages": [AIMessage(text, response_metadata=metadata)]}
 
 
-def configured[T](
-    config: RunnableConfig,
-    key: str,
-    cls: type[T],
-) -> T:
-    """Return the object graph.py injected under key; fail if missing or invalid."""
-    obj = config.get("configurable", {}).get(key)
-
-    if not isinstance(obj, cls):
+def configured[T](config: RunnableConfig, key: str, kind: type[T]) -> T:
+    """The object graph.py injected under `key`; a missing or wrong one is a wiring bug."""
+    value = config.get("configurable", {}).get(key)
+    if not isinstance(value, kind):
         raise RuntimeError(f"{key} is not configured")
-
-    return obj
+    return value
 
 
 def conversation_id(config: RunnableConfig) -> UUID:
-    """Return this run's conversation UUID from its thread ID."""
+    """This run's conversation: the graph thread id is the conversation id (ADR 0001)."""
     thread_id = config.get("configurable", {}).get("thread_id")
-
     if thread_id is None:
         raise RuntimeError("Conversation thread ID is missing")
-
     return UUID(str(thread_id))
 
 

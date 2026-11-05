@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from langchain_core.runnables import RunnableConfig
 
-from clinic_assistant.agent.nodes import Update, reply_update
+from clinic_assistant.agent.nodes import Update, configured, reply_update
 from clinic_assistant.agent.state import ConversationState
 from clinic_assistant.repository.slots import SlotsRepository
 
@@ -14,16 +14,9 @@ OMAN_TIMEZONE = timezone(timedelta(hours=4))
 # Show a maximum of five appointments to the patient.
 MAX_OFFERED_SLOTS = 5
 
-
-def get_slots_repository(config: RunnableConfig) -> SlotsRepository:
-    """Get the slots repository from the graph configuration."""
-
-    repository = config.get("configurable", {}).get("slots_repository")
-
-    if not isinstance(repository, SlotsRepository):
-        raise RuntimeError("Slots repository is not configured.")
-
-    return repository
+BOOK_BY_NUMBER = (
+    "To book, reply with the number of the appointment you want, your name and your phone number."
+)
 
 
 def parse_booking_day(value: str) -> date | None:
@@ -79,13 +72,6 @@ async def find_slots(
     specialty = entities.get("specialty")
     booking_day = entities.get("booking_day")
 
-    # Ask for the doctor or specialty if missing.
-    if not doctor_name and not specialty:
-        return {
-            **reply_update("Which doctor or specialty would you like to see?"),
-            "slots_offered": [],
-        }
-
     # Convert the requested appointment date.
     booking_date = None
 
@@ -101,8 +87,7 @@ async def find_slots(
                 "slots_offered": [],
             }
 
-    # Get the database repository.
-    repository = get_slots_repository(config)
+    repository = configured(config, "slots_repository", SlotsRepository)
 
     # Find available slots in PostgreSQL.
     slots = await repository.find_free_slots(
@@ -124,22 +109,16 @@ async def find_slots(
     # Only offer the first five available appointments.
     offered = slots[:MAX_OFFERED_SLOTS]
 
-    slot_ids: list[int] = []
+    # Numbered from 1, because the patient books by number ("book number 2") and
+    # prepare_booking reads slots_offered[slot_choice - 1].
     lines = ["Here are the available appointments:"]
-
-    for slot in offered:
-        # Save each slot ID for later booking.
-        slot_ids.append(slot["id"])
-
-        # Convert the appointment time to Oman time.
+    for number, slot in enumerate(offered, start=1):
         start = slot["starts_at"].astimezone(OMAN_TIMEZONE)
-
-        lines.append(f"- {slot['doctor_name']} ({slot['specialty']}): {start:%Y-%m-%d at %I:%M %p}")
-
-    # Ask the patient to choose an appointment.
-    lines.append("Which appointment would you like?")
+        when = f"{start:%Y-%m-%d at %I:%M %p}"
+        lines.append(f"{number}. {slot['doctor_name']} ({slot['specialty']}): {when}")
+    lines.append(BOOK_BY_NUMBER)
 
     return {
         **reply_update("\n".join(lines)),
-        "slots_offered": slot_ids,
+        "slots_offered": [slot["id"] for slot in offered],
     }

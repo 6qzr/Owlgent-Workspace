@@ -5,6 +5,7 @@ from psycopg_pool import AsyncConnectionPool
 
 from clinic_assistant.config import Settings
 
+# Covers getting a connection and running the query (AGENTS.md: every DB call has a timeout).
 DB_TIMEOUT_SECONDS = 5.0
 
 # Rows come back as dicts, so the type says so too (AsyncPostgresSaver requires it).
