@@ -4,10 +4,12 @@ from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
+from clinic_assistant.api.deps import get_runtime
 from clinic_assistant.repository.emergencies import EmergencyFlagsRepository
+from clinic_assistant.runtime import Runtime
 
 router = APIRouter(prefix="/api/v1/emergencies", tags=["Emergencies"])
 
@@ -21,11 +23,10 @@ class EmergencyFlagOut(BaseModel):
     created_at: datetime
 
 
-def get_flags_repository(request: Request) -> EmergencyFlagsRepository:
+def get_flags_repository(
+    runtime: Annotated[Runtime, Depends(get_runtime)],
+) -> EmergencyFlagsRepository:
     """Build the repository on the shared pool of the runtime opened at start-up."""
-    runtime = getattr(request.app.state, "runtime", None)
-    if runtime is None:
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Service is starting up")
     return EmergencyFlagsRepository(runtime.pool)
 
 

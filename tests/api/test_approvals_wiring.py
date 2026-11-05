@@ -2,18 +2,17 @@
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from types import SimpleNamespace
 from typing import Any, cast
 
-from fastapi import Request
 from fastapi.testclient import TestClient
 from langgraph.checkpoint.memory import InMemorySaver
 
 from clinic_assistant.agent.graph import build_graph
 from clinic_assistant.api.approvals import get_approval_service
 from clinic_assistant.llm import FakeLLM
-from clinic_assistant.main import Runtime, create_app
+from clinic_assistant.main import create_app
 from clinic_assistant.repository.approvals import ApprovalsRepository
+from clinic_assistant.runtime import Runtime
 from clinic_assistant.services.approval import ApprovalService
 
 PENDING = [{"id": 1, "conversation_id": "c-1", "booking_id": 7, "action": "cancel"}]
@@ -36,9 +35,7 @@ async def fake_runtime() -> AsyncIterator[Runtime]:
 
 def test_service_is_built_from_the_runtime() -> None:
     runtime = Runtime(graph=build_graph(FakeLLM(), InMemorySaver()), pool=cast(Any, None))
-    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(runtime=runtime)))
-
-    service = get_approval_service(cast(Request, request))
+    service = get_approval_service(runtime)
 
     assert isinstance(service, ApprovalService)
 

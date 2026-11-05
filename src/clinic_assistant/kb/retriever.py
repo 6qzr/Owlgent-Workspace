@@ -5,9 +5,7 @@ Owner: @NoorAlbusaidi (#13). Shell from #83 so the graph and app can wire it: ad
 
 import asyncio
 
-from clinic_assistant.repository.db import DictPool
-
-DB_TIMEOUT_SECONDS = 5.0
+from clinic_assistant.repository.db import DB_TIMEOUT_SECONDS, DictPool
 
 
 class Retriever:

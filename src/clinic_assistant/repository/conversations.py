@@ -3,10 +3,7 @@
 import asyncio
 from uuid import UUID
 
-from clinic_assistant.repository.db import DictPool
-
-# Covers getting a connection and running the query (AGENTS.md: every DB call has a timeout).
-DB_TIMEOUT_SECONDS = 5.0
+from clinic_assistant.repository.db import DB_TIMEOUT_SECONDS, DictPool
 
 
 async def insert_conversation(pool: DictPool, conversation_id: UUID) -> None:
