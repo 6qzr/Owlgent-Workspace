@@ -2,13 +2,12 @@
 
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
-from dataclasses import dataclass
 
 from fastapi import FastAPI
 
 from clinic_assistant import __version__
 from clinic_assistant.agent.checkpointer import open_checkpointer
-from clinic_assistant.agent.graph import ConversationGraph, Repositories, build_graph
+from clinic_assistant.agent.graph import Repositories, build_graph
 from clinic_assistant.api import approvals, conversations, emergencies, health, slots
 from clinic_assistant.config import Settings, get_settings
 from clinic_assistant.kb.loader import load_documents
@@ -17,20 +16,13 @@ from clinic_assistant.llm import LLM
 from clinic_assistant.llm.factory import create_llm
 from clinic_assistant.repository.approvals import ApprovalsRepository
 from clinic_assistant.repository.bookings import BookingsRepository
-from clinic_assistant.repository.db import DictPool, create_pool
+from clinic_assistant.repository.db import create_pool
 from clinic_assistant.repository.emergencies import EmergencyFlagsRepository
 from clinic_assistant.repository.slots import SlotsRepository
+from clinic_assistant.runtime import Runtime
 
 APP_TITLE = "Clinic Front-Desk Assistant"
 POOL_OPEN_TIMEOUT_SECONDS = 10.0
-
-
-@dataclass(frozen=True)
-class Runtime:
-    """Long-lived objects built once at start-up and shared by every request."""
-
-    graph: ConversationGraph
-    pool: DictPool
 
 
 type RuntimeFactory = Callable[[], AbstractAsyncContextManager[Runtime]]

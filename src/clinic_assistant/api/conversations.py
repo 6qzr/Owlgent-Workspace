@@ -5,10 +5,12 @@ from contextlib import contextmanager
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, StringConstraints
 
+from clinic_assistant.api.deps import get_runtime
 from clinic_assistant.llm import LLMError
+from clinic_assistant.runtime import Runtime
 from clinic_assistant.services.conversation import (
     AwaitingApproval,
     ConversationNotFound,
@@ -69,11 +71,10 @@ class ConversationOut(BaseModel):
     messages: list[HistoryMessageOut]
 
 
-def get_conversation_service(request: Request) -> ConversationService:
+def get_conversation_service(
+    runtime: Annotated[Runtime, Depends(get_runtime)],
+) -> ConversationService:
     """Build the service from the runtime opened at start-up."""
-    runtime = getattr(request.app.state, "runtime", None)
-    if runtime is None:
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Service is starting up")
     return ConversationService(runtime.graph, runtime.pool)
 
 

@@ -3,10 +3,12 @@
 from datetime import date, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel, StringConstraints
 
+from clinic_assistant.api.deps import get_runtime
 from clinic_assistant.repository.slots import SlotsRepository
+from clinic_assistant.runtime import Runtime
 
 router = APIRouter(prefix="/api/v1/slots", tags=["Slots"])
 
@@ -22,42 +24,28 @@ class SlotResponse(BaseModel):
     ends_at: datetime
 
 
-def get_slots_repository(request: Request) -> SlotsRepository:
+# Trimmed, then required: a blank filter ("   ") is rejected with 422 like an empty one.
+NonBlank = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+
+
+def get_slots_repository(runtime: Annotated[Runtime, Depends(get_runtime)]) -> SlotsRepository:
     """Build the repository on the shared pool of the runtime opened at start-up."""
-
-    runtime = getattr(request.app.state, "runtime", None)
-
-    if runtime is None:
-        raise HTTPException(
-            status_code=503,
-            detail="Slots service is not available.",
-        )
-
     return SlotsRepository(runtime.pool)
 
 
 @router.get("", response_model=list[SlotResponse])
 async def get_free_slots(
     repository: Annotated[SlotsRepository, Depends(get_slots_repository)],
-    specialty: Annotated[str | None, Query(min_length=1)] = None,
+    specialty: Annotated[NonBlank | None, Query()] = None,
     doctor_id: Annotated[int | None, Query(gt=0)] = None,
-    doctor_name: Annotated[str | None, Query(min_length=1)] = None,
+    doctor_name: Annotated[NonBlank | None, Query()] = None,
     booking_date: Annotated[date | None, Query(alias="date")] = None,
 ) -> list[SlotResponse]:
     """Find real available appointments from PostgreSQL."""
-
-    # Reject requests containing only spaces.
-    for value in (specialty, doctor_name):
-        if value is not None and not value.strip():
-            raise HTTPException(
-                status_code=422,
-                detail="Search values cannot be blank.",
-            )
-
     slots = await repository.find_free_slots(
         doctor_id=doctor_id,
-        doctor_name=doctor_name.strip() if doctor_name else None,
-        specialty=specialty.strip() if specialty else None,
+        doctor_name=doctor_name,
+        specialty=specialty,
         booking_date=booking_date,
     )
 
