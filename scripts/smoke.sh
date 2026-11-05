@@ -3,9 +3,11 @@
 # health → start → message → book → approve → fetch history.
 #
 # Usage: scripts/smoke.sh [BASE_URL]        (default http://localhost:8000)
-# Every run books one same-day Dentistry slot and approves it, because only a same-day booking
-# pauses for staff. After the last same-day slot (about 16:00 Oman time) step_book fails on
-# purpose: the approval path cannot be tested then, and it must not pass unchecked.
+# Every run books a Dentistry slot for tomorrow, then cancels it: a cancellation always pauses
+# for staff, so step_approve has an approval to decide at any time of day, and the approved
+# cancellation frees the slot again. The seed only covers 5 days from when the database
+# volume was created, so on a stack left running longer than that "tomorrow" has no slots
+# and step_book fails; recreate the stack (docker compose down -v) to reseed.
 # SMOKE_EMERGENCY=1 also sends an emergency in its own conversation (FR-6). It is off by
 # default because every run stores a real staff flag that staff can't clear, so it is for
 # throwaway stacks such as CI, never for a deployment staff use.
@@ -21,13 +23,14 @@ BASE_URL="${BASE_URL%/}"
 MESSAGE="What are your opening hours?"
 # Caught by the rule-based safety gate, so it works with any LLM provider.
 EMERGENCY_MESSAGE="I have chest pain"
-# Booking takes two turns: list today's slots, then book one by its number in that list.
+# Booking takes two turns: list tomorrow's slots, then book one by its number in that list.
+# "tomorrow" matters: a same-day slot would pause at the booking, not at the cancellation.
 # Worded for the fake provider too: the name follows "my name is", the phone has 8+ digits.
-BOOK_SLOTS_MESSAGE="Show me free dentistry slots today"
+BOOK_SLOTS_MESSAGE="Show me free dentistry slots tomorrow"
 BOOK_MESSAGE="book number 1, my name is Ali Salem, phone 91234567"
-BOOK_SPECIALTY="Dentistry"
+# The booking number from this reply is the one cancelled.
+BOOKING_NUMBER_PATTERN='Your booking number is ([0-9]+)'
 APPROVAL_DECISION='{"approved": true, "reason": "Slot is free", "staff": "smoke-test"}'
-OMAN_UTC_OFFSET_SECONDS=14400 # UTC+4 all year; the app's "today" is the day in Oman
 CURL_TIMEOUT_SECONDS=30 # covers one LLM turn; the app's own LLM timeout is shorter
 
 BODY_FILE="$(mktemp)"
@@ -94,12 +97,6 @@ send_message() {
   request POST "/api/v1/conversations/$1/messages" 200 "$body"
 }
 
-# oman_today — prints today's date in Oman (YYYY-MM-DD); jq, so GNU and BSD behave the same.
-oman_today() {
-  jq -nr --argjson offset "$OMAN_UTC_OFFSET_SECONDS" 'now + $offset | strftime("%Y-%m-%d")' |
-    tr -d '\r'
-}
-
 step_health() {
   request GET /health 200
   expect '.status == "ok" and .database == "ok"' "health: service or database is not ok"
@@ -120,21 +117,26 @@ step_send_message() {
   pass "POST .../messages: got a reply (status $(json_field '.status'))"
 }
 
-# Same-day, so the booking needs staff approval and the graph pauses; sets APPROVAL_ID.
+# Book tomorrow's slot (confirmed at once), then cancel it: a cancellation always waits for
+# staff, so the graph pauses whatever the time of day; sets APPROVAL_ID.
 step_book() {
-  local today
-  today="$(oman_today)"
-  # Checked first, so running out of slots fails with its real reason, not a wrong status.
-  request GET "/api/v1/slots?specialty=$BOOK_SPECIALTY&date=$today" 200
-  expect 'length > 0' "book: no same-day $BOOK_SPECIALTY slots left today ($today, Oman time), \
-so the approval path cannot be tested; run the smoke test earlier in the day"
   send_message "$CONVERSATION_ID" "$BOOK_SLOTS_MESSAGE"
   expect '.reply | type == "string" and length > 0' "book: no list of free slots"
   send_message "$CONVERSATION_ID" "$BOOK_MESSAGE"
-  expect '.status == "awaiting_approval"' "book: expected status awaiting_approval"
-  expect '.approval_id | type == "number" and . == floor' "book: approval_id is not an integer"
+  expect '.status == "answered"' "book: expected a future booking to be confirmed (status answered)"
+  local reply booking_id
+  reply="$(json_field '.reply')"
+  if [[ ! "$reply" =~ $BOOKING_NUMBER_PATTERN ]]; then
+    fail "book: no booking number in the confirmation (has its wording changed?). Body: $RESPONSE"
+  fi
+  booking_id="${BASH_REMATCH[1]}"
+  # The fake provider reads the first number in the message as the booking id, so the
+  # message carries no other digits.
+  send_message "$CONVERSATION_ID" "cancel booking $booking_id"
+  expect '.status == "awaiting_approval"' "cancel: expected status awaiting_approval"
+  expect '.approval_id | type == "number" and . == floor' "cancel: approval_id is not an integer"
   APPROVAL_ID="$(json_field '.approval_id')"
-  pass "book: same-day booking is waiting for staff (approval $APPROVAL_ID)"
+  pass "book: booked $booking_id for tomorrow, cancel waits for staff (approval $APPROVAL_ID)"
 }
 
 step_approve() {
