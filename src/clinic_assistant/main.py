@@ -11,6 +11,7 @@ from clinic_assistant.agent.checkpointer import open_checkpointer
 from clinic_assistant.agent.graph import ConversationGraph, Repositories, build_graph
 from clinic_assistant.api import approvals, conversations, emergencies, health, slots
 from clinic_assistant.config import Settings, get_settings
+from clinic_assistant.kb.loader import load_documents
 from clinic_assistant.kb.retriever import Retriever
 from clinic_assistant.llm import LLM
 from clinic_assistant.llm.factory import create_llm
@@ -41,13 +42,19 @@ async def postgres_runtime(settings: Settings, llm: LLM) -> AsyncIterator[Runtim
     pool = create_pool(settings)
     await pool.open(wait=True, timeout=POOL_OPEN_TIMEOUT_SECONDS)
     try:
+        # Load clinic documents into PostgreSQL.
+        await load_documents(pool)
         checkpointer = await open_checkpointer(pool)
         repositories = Repositories(
             approvals=ApprovalsRepository(pool),
             slots=SlotsRepository(pool),
             emergencies=EmergencyFlagsRepository(pool),
             bookings=BookingsRepository(pool),
-            retriever=Retriever(pool),
+            retriever=Retriever(
+                pool,
+                threshold=settings.retrieval_threshold,
+                top_k=settings.retrieval_top_k,
+            ),
         )
         yield Runtime(graph=build_graph(llm, checkpointer, repositories), pool=pool)
     finally:
