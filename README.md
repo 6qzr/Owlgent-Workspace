@@ -116,7 +116,7 @@ sudo apt-get update
 sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 ```
 
-`jq` is needed by `scripts/smoke.sh`.
+`jq` is needed by `scripts/smoke.sh` and `scripts/demo.sh` (`sudo apt-get install -y jq`).
 
 **A deploy user that is not root:**
 
@@ -153,6 +153,15 @@ bash scripts/smoke.sh               # exit 0: "All … smoke steps passed."
 From the host machine, the API answers at `http://localhost:8000/health` (NAT forwarding) or at `http://<vm-ip>:8000/health` (bridged).
 
 `git describe --tags` shows which release is running.
+
+**Demo of every Must scenario** (FAQ with source, clarify, emergency, booking, double booking, same-day approval, cancel across an API restart):
+
+```bash
+bash scripts/demo.sh                # prints each message and reply; ends "All demo scenarios passed."
+DEMO_RESTART=0 bash scripts/demo.sh http://<vm-ip>:8000   # from another machine: skips the restart step
+```
+
+It stores real conversations, bookings and an emergency flag, so use it on the demo VM, not on a stack staff use.
 
 ### 3. Roll back
 
