@@ -5,6 +5,8 @@ from psycopg_pool import AsyncConnectionPool
 
 from clinic_assistant.config import Settings
 
+DB_TIMEOUT_SECONDS = 5.0
+
 # Rows come back as dicts, so the type says so too (AsyncPostgresSaver requires it).
 type DictPool = AsyncConnectionPool[AsyncConnection[DictRow]]
 

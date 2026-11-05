@@ -11,9 +11,7 @@ from uuid import UUID
 from psycopg.errors import UniqueViolation
 
 from clinic_assistant.domain import BookingStatus
-from clinic_assistant.repository.db import DictPool
-
-DB_TIMEOUT_SECONDS = 5.0
+from clinic_assistant.repository.db import DB_TIMEOUT_SECONDS, DictPool
 
 
 class SlotTaken(Exception):
