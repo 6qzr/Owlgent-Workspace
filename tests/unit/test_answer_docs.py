@@ -206,7 +206,7 @@ async def test_answer_from_docs_missing_retriever() -> None:
 
     with pytest.raises(
         RuntimeError,
-        match="Document retriever is not configured",
+        match="retriever is not configured",
     ):
         await answer_from_docs(
             state,

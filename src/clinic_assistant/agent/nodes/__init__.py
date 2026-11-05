@@ -1,11 +1,10 @@
 """Graph nodes, one module per slice; each owner replaces the stub body in their own file."""
 
 from typing import Any
+from uuid import UUID
 
 from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.runnables import RunnableConfig
-
-from clinic_assistant.repository.approvals import ApprovalsRepository
 
 type Update = dict[str, Any]
 
@@ -24,12 +23,20 @@ def reply_update(text: str, kind: str | None = None) -> Update:
     return {"reply": text, "messages": [AIMessage(text, response_metadata=metadata)]}
 
 
-def get_repository(config: RunnableConfig) -> ApprovalsRepository:
-    """The ApprovalsRepository graph.py injects into config; shared by the approval nodes."""
-    repository = config.get("configurable", {}).get("approval_repository")
-    if not isinstance(repository, ApprovalsRepository):
-        raise RuntimeError("Approval repository is not configured")
-    return repository
+def configured[T](config: RunnableConfig, key: str, kind: type[T]) -> T:
+    """The object graph.py injected under `key`; a missing or wrong one is a wiring bug."""
+    value = config.get("configurable", {}).get(key)
+    if not isinstance(value, kind):
+        raise RuntimeError(f"{key} is not configured")
+    return value
+
+
+def conversation_id(config: RunnableConfig) -> UUID:
+    """This run's conversation: the graph thread id is the conversation id (ADR 0001)."""
+    thread_id = config.get("configurable", {}).get("thread_id")
+    if thread_id is None:
+        raise RuntimeError("Conversation thread ID is missing")
+    return UUID(str(thread_id))
 
 
 def reply_kind(message: BaseMessage) -> str | None:

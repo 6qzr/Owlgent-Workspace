@@ -3,7 +3,7 @@
 from langchain_core.messages import AnyMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 
-from clinic_assistant.agent.nodes import Update, reply_update
+from clinic_assistant.agent.nodes import Update, configured, reply_update
 from clinic_assistant.agent.nodes.safety import latest_patient_text
 from clinic_assistant.agent.prompts import (
     ANSWER_DOCS_SYSTEM_PROMPT,
@@ -27,11 +27,7 @@ async def answer_from_docs(
     if not question.strip():
         return {"sources": [], **reply_update(DONT_KNOW)}
 
-    # Get the retriever injected by the graph.
-    retriever = config.get("configurable", {}).get("retriever")
-
-    if not isinstance(retriever, Retriever):
-        raise RuntimeError("Document retriever is not configured")
+    retriever = configured(config, "retriever", Retriever)
 
     # Search the clinic documents.
     chunks = await retriever.search(question)

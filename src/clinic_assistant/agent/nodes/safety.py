@@ -4,13 +4,12 @@ Owner: @6qzr (#12).
 """
 
 import logging
-from uuid import UUID
 
 import psycopg
 from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
 
-from clinic_assistant.agent.nodes import Update, reply_update
+from clinic_assistant.agent.nodes import Update, conversation_id, reply_update
 from clinic_assistant.agent.safety_rules import EMERGENCY_INSTRUCTION, STAFF_ALERTED, is_emergency
 from clinic_assistant.agent.state import ConversationState
 from clinic_assistant.repository.emergencies import EmergencyFlagsRepository
@@ -38,9 +37,8 @@ async def flag_for_staff(
     if flags is None:
         return False
     try:
-        conversation_id = UUID(str(config["configurable"]["thread_id"]))
-        await flags.insert(conversation_id, latest_patient_text(state))
-    except (psycopg.Error, TimeoutError, KeyError, ValueError) as exc:
+        await flags.insert(conversation_id(config), latest_patient_text(state))
+    except (psycopg.Error, TimeoutError, RuntimeError, ValueError) as exc:
         # The patient's text stays out of the log.
         logger.error("Could not store the emergency flag: %s", type(exc).__name__)
         return False

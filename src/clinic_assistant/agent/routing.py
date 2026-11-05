@@ -30,7 +30,6 @@ INTENT_TO_NODE: dict[Intent, AfterIntent] = {
 
 # What the patient must give before a workflow can run; checked in code, never by the LLM.
 DOCTOR_OR_SPECIALTY = "doctor or specialty"
-DAY = "day"
 SLOT = "number of a slot from the list of free times"
 NAME = "name"
 PHONE = "phone number"

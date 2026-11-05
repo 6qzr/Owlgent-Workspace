@@ -1,13 +1,13 @@
 """Staff approval workflow for Issue #16."""
 
 from typing import cast
-from uuid import UUID
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import interrupt
 
-from clinic_assistant.agent.nodes import Update, get_repository, reply_update
+from clinic_assistant.agent.nodes import Update, configured, conversation_id, reply_update
 from clinic_assistant.agent.state import ConversationState, Decision
+from clinic_assistant.repository.approvals import ApprovalsRepository
 
 
 async def record_approval(
@@ -21,16 +21,9 @@ async def record_approval(
     if pending_action is None:
         raise RuntimeError("record_approval needs pending_action from prepare_booking/cancel")
 
-    # Use the conversation ID as the thread ID.
-    thread_id = config["configurable"]["thread_id"]
-    conversation_id = UUID(str(thread_id))
-
-    # Get the database repository.
-    repository = get_repository(config)
-
-    # Create the pending approval in PostgreSQL.
+    repository = configured(config, "approval_repository", ApprovalsRepository)
     approval_id = await repository.create(
-        conversation_id=conversation_id,
+        conversation_id=conversation_id(config),
         booking_id=pending_action["booking_id"],
         action=pending_action["action"],
     )
@@ -76,7 +69,7 @@ async def apply_decision(
     approval_id = state["approval_id"]
     decision = state["decision"]
 
-    repository = get_repository(config)
+    repository = configured(config, "approval_repository", ApprovalsRepository)
 
     # Update the approval and booking together.
     await repository.decide(

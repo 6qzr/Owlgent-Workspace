@@ -5,8 +5,8 @@ from clinic_assistant.domain import (
     ApprovalStatus,
     BookingStatus,
     Intent,
-    ReplyStatus,
 )
+from clinic_assistant.services.conversation import TurnStatus
 
 
 def test_intents_cover_every_route() -> None:
@@ -35,7 +35,7 @@ def test_approval_values_match_the_schema() -> None:
 
 
 def test_reply_statuses_match_the_api_contract() -> None:
-    assert {s.value for s in ReplyStatus} == {
+    assert {s.value for s in TurnStatus} == {
         "answered",
         "clarifying",
         "awaiting_approval",
