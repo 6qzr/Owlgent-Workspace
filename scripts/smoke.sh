@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
-# Smoke test for a running deployment (issue #19): health → start → message → fetch history.
+# Smoke test for a running deployment (issue #19):
+# health → start → message → book → approve → fetch history.
 #
 # Usage: scripts/smoke.sh [BASE_URL]        (default http://localhost:8000)
+# Every run books one same-day Dentistry slot and approves it, because only a same-day booking
+# pauses for staff. After the last same-day slot (about 16:00 Oman time) step_book fails on
+# purpose: the approval path cannot be tested then, and it must not pass unchecked.
 # SMOKE_EMERGENCY=1 also sends an emergency in its own conversation (FR-6). It is off by
 # default because every run stores a real staff flag that staff can't clear, so it is for
 # throwaway stacks such as CI, never for a deployment staff use.
 # Needs: bash, curl, jq. Exits non-zero with a FAIL line on the first failed step.
 #
 # Adding steps: write a step_<name> function that calls `request` and checks the body with
-# `expect`, then add it to STEPS below. Two steps are still to come once their slices merge:
-#   - step_book    (#15): book a slot in this conversation
-#   - step_approve (#16): approve the booking via POST /api/v1/approvals/{id}/decision
-# They go between step_send_message and step_fetch_history, so the fetch confirms the outcome.
+# `expect`, then add it to STEPS below.
 
 set -euo pipefail
 
@@ -20,6 +21,13 @@ BASE_URL="${BASE_URL%/}"
 MESSAGE="What are your opening hours?"
 # Caught by the rule-based safety gate, so it works with any LLM provider.
 EMERGENCY_MESSAGE="I have chest pain"
+# Booking takes two turns: list today's slots, then book one by its number in that list.
+# Worded for the fake provider too: the name follows "my name is", the phone has 8+ digits.
+BOOK_SLOTS_MESSAGE="Show me free dentistry slots today"
+BOOK_MESSAGE="book number 1, my name is Ali Salem, phone 91234567"
+BOOK_SPECIALTY="Dentistry"
+APPROVAL_DECISION='{"approved": true, "reason": "Slot is free", "staff": "smoke-test"}'
+OMAN_UTC_OFFSET_SECONDS=14400 # UTC+4 all year; the app's "today" is the day in Oman
 CURL_TIMEOUT_SECONDS=30 # covers one LLM turn; the app's own LLM timeout is shorter
 
 BODY_FILE="$(mktemp)"
@@ -28,6 +36,7 @@ trap 'rm -f "$BODY_FILE"' EXIT
 # Values passed from one step to the next.
 CONVERSATION_ID=""
 STARTED_ID=""
+APPROVAL_ID=""
 RESPONSE=""
 
 fail() {
@@ -85,6 +94,12 @@ send_message() {
   request POST "/api/v1/conversations/$1/messages" 200 "$body"
 }
 
+# oman_today — prints today's date in Oman (YYYY-MM-DD); jq, so GNU and BSD behave the same.
+oman_today() {
+  jq -nr --argjson offset "$OMAN_UTC_OFFSET_SECONDS" 'now + $offset | strftime("%Y-%m-%d")' |
+    tr -d '\r'
+}
+
 step_health() {
   request GET /health 200
   expect '.status == "ok" and .database == "ok"' "health: service or database is not ok"
@@ -103,6 +118,29 @@ step_send_message() {
   expect '.status | IN("answered", "clarifying", "awaiting_approval", "emergency")' \
     "message: unknown status"
   pass "POST .../messages: got a reply (status $(json_field '.status'))"
+}
+
+# Same-day, so the booking needs staff approval and the graph pauses; sets APPROVAL_ID.
+step_book() {
+  local today
+  today="$(oman_today)"
+  # Checked first, so running out of slots fails with its real reason, not a wrong status.
+  request GET "/api/v1/slots?specialty=$BOOK_SPECIALTY&date=$today" 200
+  expect 'length > 0' "book: no same-day $BOOK_SPECIALTY slots left today ($today, Oman time), \
+so the approval path cannot be tested; run the smoke test earlier in the day"
+  send_message "$CONVERSATION_ID" "$BOOK_SLOTS_MESSAGE"
+  expect '.reply | type == "string" and length > 0' "book: no list of free slots"
+  send_message "$CONVERSATION_ID" "$BOOK_MESSAGE"
+  expect '.status == "awaiting_approval"' "book: expected status awaiting_approval"
+  expect '.approval_id | type == "number" and . == floor' "book: approval_id is not an integer"
+  APPROVAL_ID="$(json_field '.approval_id')"
+  pass "book: same-day booking is waiting for staff (approval $APPROVAL_ID)"
+}
+
+step_approve() {
+  request POST "/api/v1/approvals/$APPROVAL_ID/decision" 200 "$APPROVAL_DECISION"
+  expect '.outcome | type == "string" and length > 0' "approve: no outcome for the patient"
+  pass "POST /api/v1/approvals/$APPROVAL_ID/decision: $(json_field '.outcome')"
 }
 
 step_fetch_history() {
@@ -132,8 +170,8 @@ STEPS=(
   step_health
   step_start_conversation
   step_send_message
-  # step_book     (#15)
-  # step_approve  (#16)
+  step_book
+  step_approve
   step_fetch_history
 )
 if [[ "${SMOKE_EMERGENCY:-0}" == "1" ]]; then
