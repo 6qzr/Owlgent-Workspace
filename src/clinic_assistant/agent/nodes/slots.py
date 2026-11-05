@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from langchain_core.runnables import RunnableConfig
 
-from clinic_assistant.agent.nodes import Update, reply_update
+from clinic_assistant.agent.nodes import Update, configured, reply_update
 from clinic_assistant.agent.state import ConversationState
 from clinic_assistant.repository.slots import SlotsRepository
 
@@ -17,17 +17,6 @@ MAX_OFFERED_SLOTS = 5
 BOOK_BY_NUMBER = (
     "To book, reply with the number of the appointment you want, your name and your phone number."
 )
-
-
-def get_slots_repository(config: RunnableConfig) -> SlotsRepository:
-    """Get the slots repository from the graph configuration."""
-
-    repository = config.get("configurable", {}).get("slots_repository")
-
-    if not isinstance(repository, SlotsRepository):
-        raise RuntimeError("Slots repository is not configured.")
-
-    return repository
 
 
 def parse_booking_day(value: str) -> date | None:
@@ -105,8 +94,7 @@ async def find_slots(
                 "slots_offered": [],
             }
 
-    # Get the database repository.
-    repository = get_slots_repository(config)
+    repository = configured(config, "slots_repository", SlotsRepository)
 
     # Find available slots in PostgreSQL.
     slots = await repository.find_free_slots(

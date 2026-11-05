@@ -196,7 +196,7 @@ async def test_prepare_cancel_repository_missing() -> None:
 
     with pytest.raises(
         RuntimeError,
-        match="Approval repository is not configured",
+        match="approval_repository is not configured",
     ):
         await prepare_cancel(state, config)
 
