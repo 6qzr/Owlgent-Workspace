@@ -8,6 +8,8 @@
 # cancellation frees the slot again. The seed only covers 5 days from when the database
 # volume was created, so on a stack left running longer than that "tomorrow" has no slots
 # and step_book fails; recreate the stack (docker compose down -v) to reseed.
+# Every run also leaves one cancelled booking in the database: the slot is released, but
+# staff see the cancelled row, including when the release procedure runs this on the real VM.
 # SMOKE_EMERGENCY=1 also sends an emergency in its own conversation (FR-6). It is off by
 # default because every run stores a real staff flag that staff can't clear, so it is for
 # throwaway stacks such as CI, never for a deployment staff use.
@@ -30,7 +32,7 @@ BOOK_SLOTS_MESSAGE="Show me free dentistry slots tomorrow"
 BOOK_MESSAGE="book number 1, my name is Ali Salem, phone 91234567"
 # The booking number from this reply is the one cancelled.
 BOOKING_NUMBER_PATTERN='Your booking number is ([0-9]+)'
-APPROVAL_DECISION='{"approved": true, "reason": "Slot is free", "staff": "smoke-test"}'
+APPROVAL_DECISION='{"approved": true, "reason": "Patient request", "staff": "smoke-test"}'
 CURL_TIMEOUT_SECONDS=30 # covers one LLM turn; the app's own LLM timeout is shorter
 
 BODY_FILE="$(mktemp)"
