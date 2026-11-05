@@ -113,24 +113,6 @@ async def test_find_slots_no_results() -> None:
     repository.find_free_slots.assert_awaited_once()
 
 
-async def test_find_slots_missing_specialty() -> None:
-    """Ask the patient to choose a doctor or specialty."""
-
-    repository = make_repository()
-
-    state: ConversationState = {
-        "messages": [],
-        "entities": {},
-    }
-
-    result = await find_slots(state, make_config(repository))
-
-    assert result["slots_offered"] == []
-    assert "doctor or specialty" in result["reply"].lower()
-
-    repository.find_free_slots.assert_not_awaited()
-
-
 async def test_find_slots_invalid_date() -> None:
     """Ask the patient for a valid date."""
 

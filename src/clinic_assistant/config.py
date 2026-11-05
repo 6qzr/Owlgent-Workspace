@@ -29,9 +29,6 @@ class Settings(BaseSettings):
     # API
     api_port: int = Field(default=8000, gt=0)
 
-    # Conversation history
-    max_history_messages: int = Field(default=20, gt=0)
-
     # Knowledge base retrieval
     retrieval_threshold: float = Field(default=0.03, ge=0)
     retrieval_top_k: int = Field(default=3, gt=0)
@@ -45,7 +42,6 @@ class Settings(BaseSettings):
         return self
 
 
-# to solve a Mypy type-checking issue
 @lru_cache
 def get_settings() -> Settings:
     """Return cached application settings."""

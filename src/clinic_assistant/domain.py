@@ -36,12 +36,3 @@ class ApprovalStatus(StrEnum):
     PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
-
-
-class ReplyStatus(StrEnum):
-    """The `status` field of a message reply in the API."""
-
-    ANSWERED = "answered"
-    CLARIFYING = "clarifying"
-    AWAITING_APPROVAL = "awaiting_approval"
-    EMERGENCY = "emergency"

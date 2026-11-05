@@ -1,7 +1,6 @@
 """Prompts and model-facing limits, kept out of node code (AGENTS.md: prompts live in config)."""
 
 # Only the most recent messages are sent to the model; the checkpoint keeps the full history.
-# Move to Settings.max_history_messages once the config from #55 is merged.
 CLASSIFY_HISTORY_WINDOW = 10
 
 # Below this confidence the assistant asks a clarifying question instead of guessing (FR-2).

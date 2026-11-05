@@ -72,13 +72,6 @@ async def find_slots(
     specialty = entities.get("specialty")
     booking_day = entities.get("booking_day")
 
-    # Ask for the doctor or specialty if missing.
-    if not doctor_name and not specialty:
-        return {
-            **reply_update("Which doctor or specialty would you like to see?"),
-            "slots_offered": [],
-        }
-
     # Convert the requested appointment date.
     booking_date = None
 
