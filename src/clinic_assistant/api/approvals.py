@@ -2,14 +2,16 @@
 
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, StringConstraints
 
+from clinic_assistant.api.deps import get_runtime
 from clinic_assistant.repository.approvals import (
     ApprovalAlreadyDecidedError,
     ApprovalNotFoundError,
     ApprovalsRepository,
 )
+from clinic_assistant.runtime import Runtime
 from clinic_assistant.services.approval import (
     ApprovalResumeError,
     ApprovalService,
@@ -21,25 +23,20 @@ router = APIRouter(
 )
 
 
+# Trimmed, then required: "   " is rejected with 422 like an empty string.
+NonBlank = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+
+
 class DecisionRequest(BaseModel):
-    """Staff approval or rejection request."""
+    """Staff approval or rejection request; the only place the decision's text is validated."""
 
     approved: bool
-    reason: str = Field(min_length=1)
-    staff: str = Field(min_length=1)
+    reason: NonBlank
+    staff: NonBlank
 
 
-def get_approval_service(request: Request) -> ApprovalService:
-    """Build the approval service from the runtime opened at start-up (like the conversations)."""
-
-    runtime = getattr(request.app.state, "runtime", None)
-
-    if runtime is None:
-        raise HTTPException(
-            status_code=503,
-            detail="Approval service is not available",
-        )
-
+def get_approval_service(runtime: Annotated[Runtime, Depends(get_runtime)]) -> ApprovalService:
+    """Build the approval service from the runtime opened at start-up."""
     return ApprovalService(ApprovalsRepository(runtime.pool), runtime.graph)
 
 
@@ -85,12 +82,6 @@ async def decide_approval(
         raise HTTPException(
             status_code=409,
             detail="Approval already decided",
-        ) from exc
-
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=422,
-            detail=str(exc),
         ) from exc
 
     except ApprovalResumeError as exc:

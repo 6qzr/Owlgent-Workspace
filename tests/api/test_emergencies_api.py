@@ -67,8 +67,6 @@ def test_unavailable_before_the_runtime_is_open() -> None:
 
 def test_repository_is_built_from_the_runtime_pool() -> None:
     pool = object()
-    request = SimpleNamespace(
-        app=SimpleNamespace(state=SimpleNamespace(runtime=SimpleNamespace(pool=pool)))
-    )
+    runtime = SimpleNamespace(pool=pool)
 
-    assert get_flags_repository(cast(Any, request)).pool is pool
+    assert get_flags_repository(cast(Any, runtime)).pool is pool

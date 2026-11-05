@@ -193,14 +193,16 @@ async def test_staff_decision(
         },
     ]
 
-    result = await repository.decide(
+    await repository.decide(
         approval_id=1,
         approved=approved,
         reason="Staff decision",
         staff="Receptionist",
     )
 
-    assert result["status"] == expected_approval
+    approval_update = cursor.execute.await_args_list[-1].args
+    assert "UPDATE approvals" in approval_update[0]
+    assert approval_update[1][0] == expected_approval
     assert cursor.execute.await_count == expected_queries
 
     # Check which SQL updates were executed.
@@ -247,34 +249,6 @@ async def test_already_decided() -> None:
             approved=False,
             reason="Rejected",
             staff="Receptionist",
-        )
-
-
-async def test_missing_reason() -> None:
-    """Staff must provide a reason."""
-
-    repository, _ = make_repository()
-
-    with pytest.raises(ValueError):
-        await repository.decide(
-            approval_id=1,
-            approved=False,
-            reason="",
-            staff="Receptionist",
-        )
-
-
-async def test_missing_staff() -> None:
-    """Staff must provide their name."""
-
-    repository, _ = make_repository()
-
-    with pytest.raises(ValueError):
-        await repository.decide(
-            approval_id=1,
-            approved=True,
-            reason="Approved",
-            staff="",
         )
 
 

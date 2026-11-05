@@ -9,8 +9,9 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from clinic_assistant.agent.graph import build_graph
 from clinic_assistant.llm import FakeLLM
-from clinic_assistant.main import Runtime, RuntimeFactory, create_app
+from clinic_assistant.main import RuntimeFactory, create_app
 from clinic_assistant.repository.db import DictPool
+from clinic_assistant.runtime import Runtime
 
 UNREACHABLE = {"status": "degraded", "database": "unreachable"}
 

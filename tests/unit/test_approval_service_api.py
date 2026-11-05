@@ -54,22 +54,11 @@ async def test_resume_decision(approved: bool) -> None:
 
     conversation_id = uuid4()
 
-    status = "approved" if approved else "rejected"
-
-    # First read is pending.
-    # Second read is approved or rejected.
-    repository.get_by_id.side_effect = [
-        {
-            "id": 1,
-            "conversation_id": conversation_id,
-            "status": "pending",
-        },
-        {
-            "id": 1,
-            "conversation_id": conversation_id,
-            "status": status,
-        },
-    ]
+    repository.get_by_id.return_value = {
+        "id": 1,
+        "conversation_id": conversation_id,
+        "status": "pending",
+    }
 
     # Fake graph response after resuming.
     graph.ainvoke.return_value = {
