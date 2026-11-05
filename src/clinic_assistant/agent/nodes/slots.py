@@ -14,6 +14,10 @@ OMAN_TIMEZONE = timezone(timedelta(hours=4))
 # Show a maximum of five appointments to the patient.
 MAX_OFFERED_SLOTS = 5
 
+BOOK_BY_NUMBER = (
+    "To book, reply with the number of the appointment you want, your name and your phone number."
+)
+
 
 def get_slots_repository(config: RunnableConfig) -> SlotsRepository:
     """Get the slots repository from the graph configuration."""
@@ -124,22 +128,16 @@ async def find_slots(
     # Only offer the first five available appointments.
     offered = slots[:MAX_OFFERED_SLOTS]
 
-    slot_ids: list[int] = []
+    # Numbered from 1, because the patient books by number ("book number 2") and
+    # prepare_booking reads slots_offered[slot_choice - 1].
     lines = ["Here are the available appointments:"]
-
-    for slot in offered:
-        # Save each slot ID for later booking.
-        slot_ids.append(slot["id"])
-
-        # Convert the appointment time to Oman time.
+    for number, slot in enumerate(offered, start=1):
         start = slot["starts_at"].astimezone(OMAN_TIMEZONE)
-
-        lines.append(f"- {slot['doctor_name']} ({slot['specialty']}): {start:%Y-%m-%d at %I:%M %p}")
-
-    # Ask the patient to choose an appointment.
-    lines.append("Which appointment would you like?")
+        when = f"{start:%Y-%m-%d at %I:%M %p}"
+        lines.append(f"{number}. {slot['doctor_name']} ({slot['specialty']}): {when}")
+    lines.append(BOOK_BY_NUMBER)
 
     return {
         **reply_update("\n".join(lines)),
-        "slots_offered": slot_ids,
+        "slots_offered": [slot["id"] for slot in offered],
     }

@@ -75,6 +75,24 @@ async def test_find_slots_success() -> None:
     repository.find_free_slots.assert_awaited_once()
 
 
+async def test_offered_slots_are_numbered_in_booking_order() -> None:
+    """Number N in the reply is slots_offered[N - 1], which is what the patient books by."""
+    repository = make_repository()
+    start = datetime(2026, 11, 10, 8, 0, tzinfo=UTC)
+    repository.find_free_slots.return_value = [
+        {"id": 7, "doctor_name": "Dr. Sara", "specialty": "Dentistry", "starts_at": start},
+        {"id": 3, "doctor_name": "Dr. Ali", "specialty": "Dentistry", "starts_at": start},
+    ]
+    state: ConversationState = {"messages": [], "entities": {"specialty": "Dentistry"}}
+
+    result = await find_slots(state, make_config(repository))
+
+    assert result["slots_offered"] == [7, 3]
+    assert "1. Dr. Sara" in result["reply"]
+    assert "2. Dr. Ali" in result["reply"]
+    assert "reply with the number" in result["reply"]
+
+
 async def test_find_slots_no_results() -> None:
     """Show a friendly reply when no slots are available."""
 
