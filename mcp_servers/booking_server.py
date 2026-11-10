@@ -1,15 +1,19 @@
+"""MCP server for patient registration and appointment booking."""
+
 from fastmcp import FastMCP
+
+BOOKING_PORT = 8001
 
 mcp = FastMCP("Booking MCP Server")
 
-# Inmemory storage
-patients: dict[int, dict] = {}
-appointments: dict[int, dict] = {}
+# In-memory storage
+patients: dict[int, dict[str, int | str]] = {}
+appointments: dict[int, dict[str, int | str]] = {}
 
 
 @mcp.tool
-def register_patient(name: str, phone: str) -> dict:
-    # Register a patient and return their information
+def register_patient(name: str, phone: str) -> dict[str, int | str]:
+    """Register a new patient and return their generated ID and details."""
     patient_id = len(patients) + 1
 
     patient = {
@@ -28,14 +32,12 @@ def book_appointment(
     doctor: str,
     date: str,
     time: str,
-) -> dict:
-    # book an appointment for a registered patient
-
-    # Check that the patient exists
+) -> dict[str, int | str]:
+    """Book a patient appointment if the doctor is available at that time."""
     if patient_id not in patients:
         return {"error": "Patient not found"}
 
-    # Prevent double booking
+    # Prevent double booking for the same doctor, date, and time.
     for appointment in appointments.values():
         if (
             appointment["doctor"] == doctor
@@ -59,4 +61,4 @@ def book_appointment(
 
 
 if __name__ == "__main__":
-    mcp.run(transport="http", port=8001)
+    mcp.run(transport="http", port=BOOKING_PORT)

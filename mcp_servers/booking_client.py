@@ -1,16 +1,20 @@
+"""Async MCP client demonstrating booking tools and error cases."""
+
 import asyncio
 
 from fastmcp import Client
 
+BOOKING_URL = "http://127.0.0.1:8001/mcp"
+
 
 async def run_booking_demo() -> None:
-
-    async with Client("http://127.0.0.1:8001/mcp") as client:
-        # List the available tools
+    """Call the booking tools and demonstrate success and failure cases."""
+    async with Client(BOOKING_URL) as client:
         tools = await client.list_tools()
-        print("Booking tools:", [tool.name for tool in tools])
 
-        # 1. Register a patient
+        for tool in tools:
+            print(f"Booking tool: {tool.name} - {tool.description}")
+
         patient = await client.call_tool(
             "register_patient",
             {
@@ -22,7 +26,6 @@ async def run_booking_demo() -> None:
 
         patient_id = patient.data["patient_id"]
 
-        # 2. Book an appointment
         booking_details = {
             "patient_id": patient_id,
             "doctor": "Dr. Huda",
@@ -36,14 +39,12 @@ async def run_booking_demo() -> None:
         )
         print(f"booking.book_appointment -> {booking.data}")
 
-        # 3. Error case: book the same slot
         duplicate = await client.call_tool(
             "book_appointment",
             booking_details,
         )
         print(f"booking.book_appointment -> {duplicate.data}")
 
-        # 4. Error case: unknown patient
         invalid = await client.call_tool(
             "book_appointment",
             {
