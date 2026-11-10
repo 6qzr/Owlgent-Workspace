@@ -40,7 +40,7 @@ and lists.
 From `mcp_servers/`, one terminal each:
 
 ```bash
-uv run hello_server.py      # warm-up; then: uv run hello_client.py  -> 5
+uv run hello_server.py      # warm-up on 8004; then: uv run hello_client.py  -> 5
 uv run booking_server.py    # port 8001
 uv run pharmacy_server.py   # port 8002
 uv run reports_server.py    # port 8003
