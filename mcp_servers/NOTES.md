@@ -23,7 +23,12 @@ returned value back.
 `clinic_client.py` (#114) plays the part of the three agents' MCP clients and ends with the
 diagram's example flow: add a new medicine, then view the inventory.
 
+
 ### Booking
+
+The Booking MCP Server provides tools to register patients and book appointments.
+Before booking, it checks whether the patient exists and whether the doctor already has an appointment at the same date and time.
+If the doctor is already booked, the tool returns an error to prevent double booking.
 
 ### Pharmacy
 
