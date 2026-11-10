@@ -16,7 +16,7 @@ def view_inventory() -> dict[str, int]:
 
 
 @mcp.tool
-def add_inventory(medicine: str, quantity: int) -> dict:
+def add_inventory(medicine: str, quantity: int) -> dict[str, int | str]:
     """Add stock for a medicine (a new medicine is added); reject quantity <= 0."""
     if quantity <= 0:
         return {"error": "quantity must be greater than 0"}
