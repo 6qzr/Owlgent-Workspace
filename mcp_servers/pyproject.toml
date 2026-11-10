@@ -1,0 +1,8 @@
+[project]
+name = "mcp-servers"
+version = "0.1.0"
+description = "Clinic MCP practice servers: booking, pharmacy and medical reports (#109)"
+requires-python = ">=3.14"
+dependencies = [
+    "fastmcp>=4.1.7",
+]
