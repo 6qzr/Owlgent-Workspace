@@ -27,7 +27,44 @@ diagram's example flow: add a new medicine, then view the inventory.
 
 ### Pharmacy
 
+
 ### Medical Reports
+
+The Medical Reports MCP server provides access to patients' medical history and outpatient department (OPD) records.
+
+- **Port:** 8003
+- **Server file:** `reports_server.py`
+- **Client file:** `reports_client.py`
+
+#### Available tools
+
+| Tool | Input | Description |
+|---|---|---|
+| `get_patient_medical_records` | `patient_id: int` | Retrieves a patient's medical records, including date, diagnosis, and notes. |
+| `get_opd_records` | `patient_id: int` | Retrieves a patient's outpatient records, including visit date and department. |
+
+#### Error handling
+
+Both tools check whether the requested patient ID exists before retrieving records. If the patient is not found, they return an error dictionary instead of raising an exception.
+
+Returning an error dictionary provides a predictable response that the client can inspect and handle. It also allows the MCP tool call to complete normally rather than failing with an exception for an expected situation, such as an unknown patient ID.
+
+#### Testing
+
+Run the server:
+
+```bash
+uv run reports_server.py
+```
+
+In another terminal, run the client:
+
+```bash
+uv run python reports_client.py
+```
+
+The client lists the available tools, retrieves medical and OPD records for a known patient, and tests error handling using an unknown patient ID.
+
 
 ## What we skipped
 
