@@ -32,6 +32,8 @@ If the doctor is already booked, the tool returns an error to prevent double boo
 
 ### Pharmacy
 
+add_inventory only returns the one row it changed, for example {'medicine': 'Amoxicillin', 'stock': 30}. That shows the call worked, but not that the medicine is now part of the shared inventory. So the new-medicine flow ends with view_inventory, which reads the whole inventory back from the server and shows Amoxicillin sitting next to the other medicines.
+
 ### Medical Reports
 
 ## What we skipped
