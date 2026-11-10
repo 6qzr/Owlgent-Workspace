@@ -20,7 +20,8 @@ Patients must be able to resume a conversation by ID with its full context, even
 
 ## Consequences
 - Conversations and paused approvals survive restarts and redeploys.
-- The checkpoint keeps the full history. Only the last `MAX_HISTORY_MESSAGES` (from config) are sent to the model.
+- The checkpoint keeps the full history. Only the last `CLASSIFY_HISTORY_WINDOW` messages (10, in `agent/prompts.py`) are sent to the model.
+  *Update 2026-11-05 (#102): this was first planned as a `MAX_HISTORY_MESSAGES` setting; it was never read and was removed in #100.*
 - Thread IDs never come from user input, so one patient can't read another's conversation.
 - The checkpoint tables grow by about 3 rows per turn, which is acceptable for v1.
 - `docker compose down -v` deletes all conversations. This is documented in the README.

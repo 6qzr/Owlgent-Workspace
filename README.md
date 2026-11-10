@@ -154,6 +154,8 @@ From the host machine, the API answers at `http://localhost:8000/health` (NAT fo
 
 `git describe --tags` shows which release is running.
 
+To walk through every Must scenario by hand in Swagger (for a demo or after a deploy), follow [`docs/manual-test-guide.md`](docs/manual-test-guide.md).
+
 ### 3. Roll back
 
 Check out the **previous** tag and run the same commands:
