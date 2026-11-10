@@ -4,7 +4,9 @@ All notable changes to the Clinic Front-Desk Assistant are recorded here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.0] - 2026-11-05
+## [Unreleased]
+
+## [0.1.0] - 2026-11-10
 
 First release. An agentic front desk for a clinic, reachable over a REST API.
 
@@ -62,3 +64,6 @@ First release. An agentic front desk for a clinic, reachable over a REST API.
 - Only the last 10 messages of a conversation are sent to the model for classification.
 - `docker compose down -v` deletes the database volume and every conversation with it.
 - The seed creates five days of slots from the day the volume was created.
+
+[Unreleased]: https://github.com/6qzr/Owlgent-Workspace/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/6qzr/Owlgent-Workspace/releases/tag/v0.1.0
