@@ -1,17 +1,22 @@
 #!/usr/bin/env bash
-# Smoke test for a running deployment (issue #19): health → start → message → fetch history.
+# Smoke test for a running deployment (issue #19):
+# health → start → message → book → cancel → approve → fetch history.
 #
 # Usage: scripts/smoke.sh [BASE_URL]        (default http://localhost:8000)
+# Every run books a Dentistry slot for tomorrow, then cancels it: a cancellation always pauses
+# for staff, so step_approve has an approval to decide at any time of day, and the approved
+# cancellation frees the slot again. The seed only covers 5 days from when the database
+# volume was created, so on a stack left running longer than that "tomorrow" has no slots
+# and step_book fails; recreate the stack (docker compose down -v) to reseed.
+# Every run also leaves one cancelled booking in the database: the slot is released, but
+# staff see the cancelled row, including when the release procedure runs this on the real VM.
 # SMOKE_EMERGENCY=1 also sends an emergency in its own conversation (FR-6). It is off by
 # default because every run stores a real staff flag that staff can't clear, so it is for
 # throwaway stacks such as CI, never for a deployment staff use.
 # Needs: bash, curl, jq. Exits non-zero with a FAIL line on the first failed step.
 #
 # Adding steps: write a step_<name> function that calls `request` and checks the body with
-# `expect`, then add it to STEPS below. Two steps are still to come once their slices merge:
-#   - step_book    (#15): book a slot in this conversation
-#   - step_approve (#16): approve the booking via POST /api/v1/approvals/{id}/decision
-# They go between step_send_message and step_fetch_history, so the fetch confirms the outcome.
+# `expect`, then add it to STEPS below.
 
 set -euo pipefail
 
@@ -20,6 +25,16 @@ BASE_URL="${BASE_URL%/}"
 MESSAGE="What are your opening hours?"
 # Caught by the rule-based safety gate, so it works with any LLM provider.
 EMERGENCY_MESSAGE="I have chest pain"
+# Booking takes two turns: list tomorrow's slots, then book one by its number in that list.
+# "tomorrow" matters: a same-day slot would pause at the booking, not at the cancellation.
+# Worded for the fake provider too: the name follows "my name is", the phone has 8+ digits.
+BOOK_SLOTS_MESSAGE="Show me free dentistry slots tomorrow"
+# A real slot list offers option 1; a "no free slots" reply does not.
+SLOT_OPTION_PATTERN='(^|[[:space:]])1\.'
+BOOK_MESSAGE="book number 1, my name is Ali Salem, phone 91234567"
+# The booking number from this reply is the one cancelled.
+BOOKING_NUMBER_PATTERN='Your booking number is ([0-9]+)'
+APPROVAL_DECISION='{"approved": true, "reason": "Patient request", "staff": "smoke-test"}'
 CURL_TIMEOUT_SECONDS=30 # covers one LLM turn; the app's own LLM timeout is shorter
 
 BODY_FILE="$(mktemp)"
@@ -28,6 +43,8 @@ trap 'rm -f "$BODY_FILE"' EXIT
 # Values passed from one step to the next.
 CONVERSATION_ID=""
 STARTED_ID=""
+BOOKING_ID=""
+APPROVAL_ID=""
 RESPONSE=""
 
 fail() {
@@ -105,6 +122,41 @@ step_send_message() {
   pass "POST .../messages: got a reply (status $(json_field '.status'))"
 }
 
+# Book tomorrow's slot (confirmed at once); sets BOOKING_ID.
+step_book() {
+  send_message "$CONVERSATION_ID" "$BOOK_SLOTS_MESSAGE"
+  if [[ ! "$(json_field '.reply')" =~ $SLOT_OPTION_PATTERN ]]; then
+    fail "book: no free Dentistry slots tomorrow; recreate the stack (docker compose down -v) to reseed. Body: $RESPONSE"
+  fi
+  send_message "$CONVERSATION_ID" "$BOOK_MESSAGE"
+  expect '.status == "answered"' "book: expected a future booking to be confirmed (status answered)"
+  local reply
+  reply="$(json_field '.reply')"
+  if [[ ! "$reply" =~ $BOOKING_NUMBER_PATTERN ]]; then
+    fail "book: no booking number in the confirmation (has its wording changed?). Body: $RESPONSE"
+  fi
+  BOOKING_ID="${BASH_REMATCH[1]}"
+  pass "book: booked $BOOKING_ID for tomorrow"
+}
+
+# Cancel that booking: a cancellation always waits for staff, so the graph pauses whatever the
+# time of day; sets APPROVAL_ID.
+step_cancel() {
+  # The fake provider reads the first number in the message as the booking id, so the
+  # message carries no other digits.
+  send_message "$CONVERSATION_ID" "cancel booking $BOOKING_ID"
+  expect '.status == "awaiting_approval"' "cancel: expected status awaiting_approval"
+  expect '.approval_id | type == "number" and . == floor' "cancel: approval_id is not an integer"
+  APPROVAL_ID="$(json_field '.approval_id')"
+  pass "cancel: booking $BOOKING_ID waits for staff (approval $APPROVAL_ID)"
+}
+
+step_approve() {
+  request POST "/api/v1/approvals/$APPROVAL_ID/decision" 200 "$APPROVAL_DECISION"
+  expect '.outcome | type == "string" and length > 0' "approve: no outcome for the patient"
+  pass "POST /api/v1/approvals/$APPROVAL_ID/decision: $(json_field '.outcome')"
+}
+
 step_fetch_history() {
   request GET "/api/v1/conversations/$CONVERSATION_ID" 200
   expect '.messages | length >= 2' "history: expected at least the message and its reply"
@@ -132,8 +184,9 @@ STEPS=(
   step_health
   step_start_conversation
   step_send_message
-  # step_book     (#15)
-  # step_approve  (#16)
+  step_book
+  step_cancel
+  step_approve
   step_fetch_history
 )
 if [[ "${SMOKE_EMERGENCY:-0}" == "1" ]]; then
