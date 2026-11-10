@@ -1,6 +1,6 @@
 [project]
 name = "clinic-assistant"
-version = "0.0.0"
+version = "0.1.0"
 description = "Clinic Front-Desk Assistant: a REST API driven by LangGraph workflows."
 readme = "README.md"
 license = "MIT"
