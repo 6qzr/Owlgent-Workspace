@@ -23,9 +23,16 @@ returned value back.
 `clinic_client.py` (#114) plays the part of the three agents' MCP clients and ends with the
 diagram's example flow: add a new medicine, then view the inventory.
 
+
 ### Booking
 
+The Booking MCP Server provides tools to register patients and book appointments.
+Before booking, it checks whether the patient exists and whether the doctor already has an appointment at the same date and time.
+If the doctor is already booked, the tool returns an error to prevent double booking.
+
 ### Pharmacy
+
+add_inventory only returns the one row it changed, for example {'medicine': 'Amoxicillin', 'stock': 30}. That shows the call worked, but not that the medicine is now part of the shared inventory. So the new-medicine flow ends with view_inventory, which reads the whole inventory back from the server and shows Amoxicillin sitting next to the other medicines.
 
 ### Medical Reports
 
