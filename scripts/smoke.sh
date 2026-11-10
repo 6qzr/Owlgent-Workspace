@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Smoke test for a running deployment (issue #19):
-# health → start → message → book → approve → fetch history.
+# health → start → message → book → cancel → approve → fetch history.
 #
 # Usage: scripts/smoke.sh [BASE_URL]        (default http://localhost:8000)
 # Every run books a Dentistry slot for tomorrow, then cancels it: a cancellation always pauses
@@ -29,6 +29,8 @@ EMERGENCY_MESSAGE="I have chest pain"
 # "tomorrow" matters: a same-day slot would pause at the booking, not at the cancellation.
 # Worded for the fake provider too: the name follows "my name is", the phone has 8+ digits.
 BOOK_SLOTS_MESSAGE="Show me free dentistry slots tomorrow"
+# A real slot list offers option 1; a "no free slots" reply does not.
+SLOT_OPTION_PATTERN='(^|[[:space:]])1\.'
 BOOK_MESSAGE="book number 1, my name is Ali Salem, phone 91234567"
 # The booking number from this reply is the one cancelled.
 BOOKING_NUMBER_PATTERN='Your booking number is ([0-9]+)'
@@ -41,6 +43,7 @@ trap 'rm -f "$BODY_FILE"' EXIT
 # Values passed from one step to the next.
 CONVERSATION_ID=""
 STARTED_ID=""
+BOOKING_ID=""
 APPROVAL_ID=""
 RESPONSE=""
 
@@ -119,26 +122,33 @@ step_send_message() {
   pass "POST .../messages: got a reply (status $(json_field '.status'))"
 }
 
-# Book tomorrow's slot (confirmed at once), then cancel it: a cancellation always waits for
-# staff, so the graph pauses whatever the time of day; sets APPROVAL_ID.
+# Book tomorrow's slot (confirmed at once); sets BOOKING_ID.
 step_book() {
   send_message "$CONVERSATION_ID" "$BOOK_SLOTS_MESSAGE"
-  expect '.reply | type == "string" and length > 0' "book: no list of free slots"
+  if [[ ! "$(json_field '.reply')" =~ $SLOT_OPTION_PATTERN ]]; then
+    fail "book: no free Dentistry slots tomorrow; recreate the stack (docker compose down -v) to reseed. Body: $RESPONSE"
+  fi
   send_message "$CONVERSATION_ID" "$BOOK_MESSAGE"
   expect '.status == "answered"' "book: expected a future booking to be confirmed (status answered)"
-  local reply booking_id
+  local reply
   reply="$(json_field '.reply')"
   if [[ ! "$reply" =~ $BOOKING_NUMBER_PATTERN ]]; then
     fail "book: no booking number in the confirmation (has its wording changed?). Body: $RESPONSE"
   fi
-  booking_id="${BASH_REMATCH[1]}"
+  BOOKING_ID="${BASH_REMATCH[1]}"
+  pass "book: booked $BOOKING_ID for tomorrow"
+}
+
+# Cancel that booking: a cancellation always waits for staff, so the graph pauses whatever the
+# time of day; sets APPROVAL_ID.
+step_cancel() {
   # The fake provider reads the first number in the message as the booking id, so the
   # message carries no other digits.
-  send_message "$CONVERSATION_ID" "cancel booking $booking_id"
+  send_message "$CONVERSATION_ID" "cancel booking $BOOKING_ID"
   expect '.status == "awaiting_approval"' "cancel: expected status awaiting_approval"
   expect '.approval_id | type == "number" and . == floor' "cancel: approval_id is not an integer"
   APPROVAL_ID="$(json_field '.approval_id')"
-  pass "book: booked $booking_id for tomorrow, cancel waits for staff (approval $APPROVAL_ID)"
+  pass "cancel: booking $BOOKING_ID waits for staff (approval $APPROVAL_ID)"
 }
 
 step_approve() {
@@ -175,6 +185,7 @@ STEPS=(
   step_start_conversation
   step_send_message
   step_book
+  step_cancel
   step_approve
   step_fetch_history
 )
