@@ -1,43 +1,29 @@
-"""Client for testing the Medical Reports MCP server."""
+"""Client for the Medical Reports MCP server: known patient records and unknown-patient errors."""
 
 import asyncio
 
 from fastmcp import Client
 
 SERVER_URL = "http://127.0.0.1:8003/mcp"
+KNOWN_PATIENT_ID = 1
+UNKNOWN_PATIENT_ID = 99
 
 
-async def main() -> None:
-    """Connect to the server and test its medical reports tools."""
+async def call_and_print(client: Client, tool: str, patient_id: int) -> None:
+    """Call one reports tool for a patient and print its result on a single line."""
+    result = await client.call_tool(tool, {"patient_id": patient_id})
+    print(f"reports.{tool} -> {result.data}")
 
+
+async def run_reports_demo() -> None:
+    """List the tools, read both record types for a known patient, then show the errors."""
     async with Client(SERVER_URL) as client:
-        # 1. List the available tools
         tools = await client.list_tools()
-
-        print("Available tools:")
-        for tool in tools:
-            print(f"- {tool.name}")
-
-        # 2. Get medical records for patient 1
-        print("\nMedical records for patient 1:")
-        result = await client.call_tool("get_patient_medical_records", {"patient_id": 1})
-        print(result.data)
-
-        # 3. Get OPD records for patient 1
-        print("\nOPD records for patient 1:")
-        result = await client.call_tool("get_opd_records", {"patient_id": 1})
-        print(result.data)
-
-        # 4. Test unknown patient
-        print("\nMedical records for unknown patient 99:")
-        result = await client.call_tool("get_patient_medical_records", {"patient_id": 99})
-        print(result.data)
-
-        # 5. Test unknown patient for OPD records
-        print("\nOPD records for unknown patient 99:")
-        result = await client.call_tool("get_opd_records", {"patient_id": 99})
-        print(result.data)
+        print(f"reports tools -> {[tool.name for tool in tools]}")
+        for patient_id in (KNOWN_PATIENT_ID, UNKNOWN_PATIENT_ID):
+            await call_and_print(client, "get_patient_medical_records", patient_id)
+            await call_and_print(client, "get_opd_records", patient_id)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(run_reports_demo())
