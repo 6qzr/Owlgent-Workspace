@@ -1,4 +1,3 @@
-
 from fastmcp import FastMCP
 
 PORT = 8003
@@ -6,35 +5,13 @@ PORT = 8003
 mcp = FastMCP("Medical Reports Server")
 
 medical_records = {
-    1: [
-        {
-            "date": "2026-10-02",
-            "diagnosis": "Flu",
-            "notes": "Rest"
-        }
-    ],
-    2: [
-        {
-            "date": "2026-10-05",
-            "diagnosis": "Headache",
-            "notes": "Follow-up if symptoms continue"
-        }
-    ]
+    1: [{"date": "2026-10-02", "diagnosis": "Flu", "notes": "Rest"}],
+    2: [{"date": "2026-10-05", "diagnosis": "Headache", "notes": "Follow-up if symptoms continue"}],
 }
 
 opd_records = {
-    1: [
-        {
-            "date": "2026-10-02",
-            "department": "General"
-        }
-    ],
-    2: [
-        {
-            "date": "2026-10-05",
-            "department": "Cardiology"
-        }
-    ]
+    1: [{"date": "2026-10-02", "department": "General"}],
+    2: [{"date": "2026-10-05", "department": "Cardiology"}],
 }
 
 
