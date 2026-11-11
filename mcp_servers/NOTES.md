@@ -36,6 +36,10 @@ add_inventory only returns the one row it changed, for example {'medicine': 'Amo
 
 ### Medical Reports
 
+Both tools check that the patient ID exists before reading any records. For an unknown patient
+they return an error dict instead of raising an exception: an unknown ID is an expected case, so
+the tool call still completes normally and the client gets a predictable answer it can inspect.
+
 ## What we skipped
 
 The agents themselves, the UI, the API gateway, auth (JWT/RBAC), Temporal, Redis, PostgreSQL,
