@@ -25,7 +25,7 @@ services:
       context: .
       dockerfile: ingestion/Dockerfile
     environment:
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?set OPENAI_API_KEY in .env}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
       QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
       QDRANT_COLLECTION: ${QDRANT_COLLECTION:-clinic_docs}
@@ -41,7 +41,7 @@ services:
       context: .
       dockerfile: servers/appointments/Dockerfile
     environment:
-      JWT_SECRET: ${JWT_SECRET}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
     networks:
       - clinic_net
     healthcheck:
@@ -61,7 +61,7 @@ services:
       context: .
       dockerfile: servers/pharmacy/Dockerfile
     environment:
-      JWT_SECRET: ${JWT_SECRET}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
     networks:
       - clinic_net
     healthcheck:
@@ -81,7 +81,7 @@ services:
       context: .
       dockerfile: servers/records/Dockerfile
     environment:
-      JWT_SECRET: ${JWT_SECRET}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
     networks:
       - clinic_net
     healthcheck:
@@ -101,8 +101,8 @@ services:
       context: .
       dockerfile: servers/knowledge/Dockerfile
     environment:
-      JWT_SECRET: ${JWT_SECRET}
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?set OPENAI_API_KEY in .env}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
       QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
       QDRANT_COLLECTION: ${QDRANT_COLLECTION:-clinic_docs}
@@ -130,14 +130,14 @@ services:
       context: .
       dockerfile: api/Dockerfile
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     environment:
-      JWT_SECRET: ${JWT_SECRET}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       TOKEN_TTL_SECONDS: ${TOKEN_TTL_SECONDS:-3600}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
-      OAUTH_REDIRECT_URI: ${OAUTH_REDIRECT_URI}
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?set GOOGLE_CLIENT_ID in .env}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:?set GOOGLE_CLIENT_SECRET in .env}
+      OAUTH_REDIRECT_URI: ${OAUTH_REDIRECT_URI:?set OAUTH_REDIRECT_URI in .env}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?set OPENAI_API_KEY in .env}
       CHAT_MODEL: ${CHAT_MODEL:-gpt-4.1-mini}
       APPOINTMENTS_MCP_URL: ${APPOINTMENTS_MCP_URL:-http://appointments:8001/mcp}
       PHARMACY_MCP_URL: ${PHARMACY_MCP_URL:-http://pharmacy:8002/mcp}
