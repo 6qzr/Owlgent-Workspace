@@ -80,6 +80,24 @@ jobs:
           done
       - run: uv run pytest
 
+  v2:
+    # Clinic Assistant v2 (#314) is its own uv project; its checks run from its own folder.
+    name: v2
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: clinic_assistant_v2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy .
+      - run: uv run pytest
+
   compose-up:
     name: compose-up
     runs-on: ubuntu-latest
