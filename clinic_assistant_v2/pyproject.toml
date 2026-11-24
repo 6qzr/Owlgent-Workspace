@@ -6,10 +6,7 @@ description = "Clinic Assistant v2 (#314): FastMCP servers, Qdrant RAG, Google O
 requires-python = ">=3.14"
 dependencies = [
     "fastmcp>=4.2.5",
-<<<<<<< HEAD
-=======
     "openai>=3.58.0",
->>>>>>> origin/main
     "pyjwt>=2.15.1",
     "pypdf>=7.1.1",
     "python-dotenv>=1.2.4",
@@ -31,16 +28,15 @@ target-version = "py314"
 
 [tool.ruff.lint]
 select = [
-    "E", "W", "F",  # pycodestyle errors/warnings, pyflakes
-    "I",            # import order
-    "B",            # bugbear: likely bugs
-    "S",            # bandit security: hardcoded secrets, missing timeouts
-    "UP",           # modern Python syntax
-    "SIM",          # simplifications
+    "E", "W", "F",
+    "I",
+    "B",
+    "S",
+    "UP",
+    "SIM",
 ]
 
 [tool.ruff.lint.per-file-ignores]
-# pytest uses bare assert; test secrets are fake values made for the tests.
 "tests/**" = ["S101", "S105", "S106"]
 
 [tool.ruff.format]
@@ -50,8 +46,6 @@ quote-style = "double"
 [tool.mypy]
 python_version = "3.14"
 strict = true
-# Every folder is a package from this root (e.g. servers.records.tokens), so the
-# per-server copies of tokens.py never clash.
 explicit_package_bases = true
 files = ["."]
 exclude = ["\\.venv/"]
