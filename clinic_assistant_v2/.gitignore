@@ -1,0 +1,10 @@
+# Secrets: never commit. Only .env.example (placeholders) is tracked.
+.env
+.env.*
+!.env.example
+
+.venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
