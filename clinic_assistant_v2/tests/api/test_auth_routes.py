@@ -6,6 +6,7 @@ from collections.abc import Callable
 from urllib.parse import parse_qs, urlsplit
 
 import httpx
+import httpx2
 import jwt
 import pytest
 from fastapi.testclient import TestClient
@@ -62,10 +63,12 @@ def make_client(handler: Handler) -> TestClient:
     return TestClient(create_app(transport=httpx.MockTransport(handler)))
 
 
-def call_callback(client: TestClient, state: str = STATE, code: str = "the-code") -> httpx.Response:
+def call_callback(
+    client: TestClient, state: str = STATE, code: str = "the-code"
+) -> httpx2.Response:
     """Call /auth/callback as the browser would, with the state cookie set at login."""
     client.cookies.set(STATE_COOKIE_NAME, STATE)
-    response: httpx.Response = client.get("/auth/callback", params={"code": code, "state": state})
+    response: httpx2.Response = client.get("/auth/callback", params={"code": code, "state": state})
     return response
 
 
