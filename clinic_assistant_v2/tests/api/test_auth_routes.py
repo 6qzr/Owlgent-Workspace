@@ -20,21 +20,12 @@ from api.config import (
 )
 from api.main import create_app
 
+# The same values conftest.py's api_env fixture sets for every test.
 TEST_SECRET = "test-secret-that-is-long-enough-for-hs256-signing"
 REDIRECT_URI = "http://localhost:8000/auth/callback"
 STATE = "known-test-state"
 
 Handler = Callable[[httpx.Request], httpx.Response]
-
-
-@pytest.fixture(autouse=True)
-def api_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Give every test fake Google settings and a known JWT secret."""
-    monkeypatch.setenv("JWT_SECRET", TEST_SECRET)
-    monkeypatch.setenv("GOOGLE_CLIENT_ID", "fake-client-id")
-    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "fake-client-secret")
-    monkeypatch.setenv("OAUTH_REDIRECT_URI", REDIRECT_URI)
-    monkeypatch.delenv("TOKEN_TTL_SECONDS", raising=False)
 
 
 def fake_google(
