@@ -8,8 +8,7 @@ import pytest
 from servers.records import server
 from servers.records.tokens import create_token
 
-TEST_SECRET = "fake-medical-records-test-secret"
-
+TEST_SECRET = "unit-test-secret-not-for-production"
 
 @pytest.fixture(autouse=True)
 def setup_test(monkeypatch: pytest.MonkeyPatch) -> None:
