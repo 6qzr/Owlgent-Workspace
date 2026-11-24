@@ -1,7 +1,9 @@
 """Tests for the Appointments MCP Server."""
 
 import time
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
+from threading import Barrier
 
 import jwt
 import pytest
@@ -70,6 +72,44 @@ def test_duplicate_booking(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
     assert result == {"error": "slot already booked"}
+
+
+def test_concurrent_booking(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Two simultaneous requests cannot book the same slot."""
+    authenticate(monkeypatch, "user-a", ["appointments:write"])
+
+    barrier = Barrier(2)
+
+    def book_same_slot() -> server.Appointment:
+        """Synchronize and attempt to book one shared slot."""
+        barrier.wait(timeout=5)
+
+        return server.book_appointment(
+            doctor="Dr. Sara",
+            date="2026-12-10",
+            time="11:00",
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(book_same_slot) for _ in range(2)]
+        results = [future.result() for future in futures]
+
+    successful = [result for result in results if "appointment_id" in result]
+
+    rejected = [result for result in results if result.get("error") == "slot already booked"]
+
+    bookings_for_slot = [
+        appointment
+        for appointment in server.appointments.values()
+        if appointment["doctor"] == "Dr. Sara"
+        and appointment["date"] == "2026-12-10"
+        and appointment["time"] == "11:00"
+        and appointment["status"] == "booked"
+    ]
+
+    assert len(successful) == 1
+    assert len(rejected) == 1
+    assert len(bookings_for_slot) == 1
 
 
 def test_list_my_appointments(monkeypatch: pytest.MonkeyPatch) -> None:

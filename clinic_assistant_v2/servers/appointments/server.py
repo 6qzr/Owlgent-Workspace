@@ -1,5 +1,6 @@
 """Appointments MCP server for Clinic Assistant v2."""
 
+import threading
 from typing import Any
 
 from fastmcp import FastMCP
@@ -14,7 +15,7 @@ from servers.appointments.tokens import (
     verify_token,
 )
 
-HOST = "0.0.0.0"  # noqa: S104 - Required for Docker networking.PORT = 8001
+HOST = "0.0.0.0"  # noqa: S104 - Required for Docker networking.
 PORT = 8001
 
 READ_SCOPE = "appointments:read"
@@ -23,6 +24,9 @@ WRITE_SCOPE = "appointments:write"
 mcp = FastMCP("Appointments MCP Server")
 
 Appointment = dict[str, Any]
+
+# Protect shared appointment data from concurrent requests.
+appointments_lock = threading.Lock()
 
 # Sample appointments stored in memory.
 appointments: dict[int, Appointment] = {
@@ -61,35 +65,36 @@ def book_appointment(
     date: str,
     time: str,
 ) -> Appointment:
-    """Book a new appointment for the signed-in patient."""
+    """Book a free appointment for the signed-in patient."""
     try:
         user_id = get_current_user(WRITE_SCOPE)
     except Unauthorized:
         return {"error": "unauthorized"}
 
-    # Prevent booking an occupied slot.
-    for existing in appointments.values():
-        if (
-            existing["doctor"] == doctor
-            and existing["date"] == date
-            and existing["time"] == time
-            and existing["status"] == "booked"
-        ):
-            return {"error": "slot already booked"}
+    # Only one thread can check and book a slot at a time.
+    with appointments_lock:
+        for existing in appointments.values():
+            if (
+                existing["doctor"] == doctor
+                and existing["date"] == date
+                and existing["time"] == time
+                and existing["status"] == "booked"
+            ):
+                return {"error": "slot already booked"}
 
-    appointment_id = max(appointments, default=0) + 1
+        appointment_id = max(appointments, default=0) + 1
 
-    new_appointment: Appointment = {
-        "appointment_id": appointment_id,
-        "user_id": user_id,
-        "doctor": doctor,
-        "date": date,
-        "time": time,
-        "status": "booked",
-    }
+        new_appointment: Appointment = {
+            "appointment_id": appointment_id,
+            "user_id": user_id,
+            "doctor": doctor,
+            "date": date,
+            "time": time,
+            "status": "booked",
+        }
 
-    appointments[appointment_id] = new_appointment
-    return new_appointment.copy()
+        appointments[appointment_id] = new_appointment
+        return new_appointment.copy()
 
 
 @mcp.tool
@@ -100,13 +105,14 @@ def list_my_appointments() -> list[Appointment] | Appointment:
     except Unauthorized:
         return {"error": "unauthorized"}
 
-    my_appointments: list[Appointment] = []
+    with appointments_lock:
+        my_appointments: list[Appointment] = []
 
-    for appointment in appointments.values():
-        if appointment["user_id"] == user_id:
-            my_appointments.append(appointment.copy())
+        for appointment in appointments.values():
+            if appointment["user_id"] == user_id:
+                my_appointments.append(appointment.copy())
 
-    return my_appointments
+        return my_appointments
 
 
 @mcp.tool
@@ -117,20 +123,20 @@ def cancel_appointment(appointment_id: int) -> Appointment:
     except Unauthorized:
         return {"error": "unauthorized"}
 
-    appointment = appointments.get(appointment_id)
+    with appointments_lock:
+        appointment = appointments.get(appointment_id)
 
-    if appointment is None:
-        return {"error": "not found"}
+        if appointment is None:
+            return {"error": "not found"}
 
-    # Do not reveal or modify another user's appointment.
-    if appointment["user_id"] != user_id:
-        return {"error": "not found"}
+        if appointment["user_id"] != user_id:
+            return {"error": "not found"}
 
-    if appointment["status"] == "cancelled":
-        return {"error": "already cancelled"}
+        if appointment["status"] == "cancelled":
+            return {"error": "already cancelled"}
 
-    appointment["status"] = "cancelled"
-    return appointment.copy()
+        appointment["status"] = "cancelled"
+        return appointment.copy()
 
 
 @mcp.custom_route("/health", methods=["GET"])
