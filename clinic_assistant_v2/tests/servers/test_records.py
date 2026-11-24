@@ -10,6 +10,7 @@ from servers.records.tokens import create_token
 
 TEST_SECRET = "unit-test-secret-not-for-production"
 
+
 @pytest.fixture(autouse=True)
 def setup_test(monkeypatch: pytest.MonkeyPatch) -> None:
     """Configure a fake JWT secret for each test."""
