@@ -268,6 +268,7 @@ dependencies = [
     { name = "fastmcp" },
     { name = "httpx" },
     { name = "pyjwt" },
+    { name = "starlette" },
     { name = "uvicorn" },
 ]
 
@@ -285,6 +286,7 @@ requires-dist = [
     { name = "fastmcp", specifier = ">=4.2.5" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "pyjwt", specifier = ">=2.15.1" },
+    { name = "starlette", specifier = ">=1.10.0" },
     { name = "uvicorn", specifier = ">=0.54.0" },
 ]
 
