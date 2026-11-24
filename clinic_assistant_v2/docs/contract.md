@@ -83,7 +83,8 @@ The API holds no tool secrets: no Qdrant settings and no server data.
 
 ## The JWT
 
-- HS256, signed with `JWT_SECRET`.
+- HS256, signed with `JWT_SECRET`. The secret must be at least 32 bytes and must not be the
+  `.env.example` placeholder `change-me`, otherwise `get_jwt_secret()` refuses to start.
 - Exactly four claims: `sub` (str, Google's stable user id), `email` (str), `scopes` (list of str),
   and `exp` (now + `TOKEN_TTL_SECONDS`, in Unix seconds).
 - Scopes: `appointments:read`, `appointments:write`, `pharmacy:read`, `pharmacy:write`,
@@ -100,7 +101,8 @@ Copy `auth_reference/tokens.py` unchanged. It provides:
 - `token_from_header(authorization: str | None) -> str | None`. It strips the `Bearer ` prefix.
 - `create_token(sub, email, scopes) -> str`. The API uses it to issue tokens, and tests use it to
   make test tokens.
-- `get_jwt_secret()`. Call it once at server start-up, so a missing `JWT_SECRET` fails fast.
+- `get_jwt_secret()`. Call it once at server start-up, so a missing, placeholder or too-short `JWT_SECRET` fails
+  fast.
 
 Every tool that touches user data starts like this:
 
