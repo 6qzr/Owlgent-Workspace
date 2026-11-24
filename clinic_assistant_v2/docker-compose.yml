@@ -1,0 +1,175 @@
+
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.20.2
+    ports:
+      - "127.0.0.1:6333:6333"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    networks:
+      - clinic_net
+    healthcheck:
+      test:
+        - CMD
+        - bash
+        - -c
+        - ":> /dev/tcp/127.0.0.1/6333"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  ingest:
+    build:
+      context: .
+      dockerfile: ingestion/Dockerfile
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-clinic_docs}
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    networks:
+      - clinic_net
+    restart: "no"
+
+  appointments:
+    build:
+      context: .
+      dockerfile: servers/appointments/Dockerfile
+    environment:
+      JWT_SECRET: ${JWT_SECRET}
+    networks:
+      - clinic_net
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8001/health', timeout=5)"
+      interval: 10s
+      timeout: 6s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  pharmacy:
+    build:
+      context: .
+      dockerfile: servers/pharmacy/Dockerfile
+    environment:
+      JWT_SECRET: ${JWT_SECRET}
+    networks:
+      - clinic_net
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8002/health', timeout=5)"
+      interval: 10s
+      timeout: 6s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  records:
+    build:
+      context: .
+      dockerfile: servers/records/Dockerfile
+    environment:
+      JWT_SECRET: ${JWT_SECRET}
+    networks:
+      - clinic_net
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8003/health', timeout=5)"
+      interval: 10s
+      timeout: 6s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  knowledge:
+    build:
+      context: .
+      dockerfile: servers/knowledge/Dockerfile
+    environment:
+      JWT_SECRET: ${JWT_SECRET}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-clinic_docs}
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      ingest:
+        condition: service_completed_successfully
+    networks:
+      - clinic_net
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8004/health', timeout=5)"
+      interval: 10s
+      timeout: 6s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      JWT_SECRET: ${JWT_SECRET}
+      TOKEN_TTL_SECONDS: ${TOKEN_TTL_SECONDS:-3600}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      OAUTH_REDIRECT_URI: ${OAUTH_REDIRECT_URI}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      CHAT_MODEL: ${CHAT_MODEL:-gpt-4.1-mini}
+      APPOINTMENTS_MCP_URL: ${APPOINTMENTS_MCP_URL:-http://appointments:8001/mcp}
+      PHARMACY_MCP_URL: ${PHARMACY_MCP_URL:-http://pharmacy:8002/mcp}
+      RECORDS_MCP_URL: ${RECORDS_MCP_URL:-http://records:8003/mcp}
+      KNOWLEDGE_MCP_URL: ${KNOWLEDGE_MCP_URL:-http://knowledge:8004/mcp}
+    depends_on:
+      appointments:
+        condition: service_healthy
+      pharmacy:
+        condition: service_healthy
+      records:
+        condition: service_healthy
+      knowledge:
+        condition: service_healthy
+    networks:
+      - clinic_net
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"
+      interval: 10s
+      timeout: 6s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+volumes:
+  qdrant_storage:
+
+networks:
+  clinic_net:
+    name: clinic_net
+    driver: bridge
