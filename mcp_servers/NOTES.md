@@ -20,9 +20,10 @@ returned value back.
 | Pharmacy | 8002 | `view_inventory`, `add_inventory` | #112 |
 | Medical Reports | 8003 | `get_patient_medical_records`, `get_opd_records` | #113 |
 
-`clinic_client.py` (#114) plays the part of the three agents' MCP clients and ends with the
-diagram's example flow: add a new medicine, then view the inventory.
-
+`clinic_client.py` (#114) plays the part of the three agents' MCP clients. It runs the booking,
+pharmacy and reports demos together with `asyncio.gather`, so their lines can interleave; each line
+starts with its server name. It then ends with the diagram's example flow on its own: add a new
+medicine, then view the inventory.
 
 ### Booking
 
