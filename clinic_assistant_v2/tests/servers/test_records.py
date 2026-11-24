@@ -6,7 +6,7 @@ import jwt
 import pytest
 
 from servers.records import server
-from servers.records.tokens import create_token
+from servers.records.tokens import Unauthorized, create_token, verify_token
 
 TEST_SECRET = "unit-test-secret-not-for-production"
 
@@ -144,3 +144,24 @@ def test_expired_token(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
     assert server.get_my_last_medical_record() == {"error": "unauthorized"}
+
+
+def test_verify_token_rejects_wrong_signature(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reject a JWT signed using a different secret."""
+    wrong_secret = "different-secret-for-testing-only-12345"
+
+    token = jwt.encode(
+        {
+            "sub": "user-a",
+            "email": "user-a@example.com",
+            "scopes": ["records:read"],
+            "exp": int(time.time()) + 3600,
+        },
+        wrong_secret,
+        algorithm="HS256",
+    )
+
+    with pytest.raises(Unauthorized):
+        verify_token(token, "records:read")
