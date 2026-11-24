@@ -1,5 +1,7 @@
 """Pharmacy Inventory MCP Server with JWT authentication."""
 
+import threading
+
 from fastmcp import FastMCP
 from fastmcp.server.dependencies import get_http_headers
 from starlette.requests import Request
@@ -20,7 +22,8 @@ WRITE_SCOPE = "pharmacy:write"
 
 mcp = FastMCP("Pharmacy MCP Server")
 
-# In-memory medicine inventory.
+inventory_lock = threading.Lock()
+
 inventory: dict[str, int] = {
     "Paracetamol": 120,
     "Ibuprofen": 40,
@@ -28,7 +31,7 @@ inventory: dict[str, int] = {
 
 
 def verify_access(required_scope: str) -> bool:
-    """Verify the Bearer token and its required scope."""
+    """Verify the Bearer token and required scope."""
     headers = get_http_headers(include={"authorization"})
     authorization = headers.get("authorization")
     token = token_from_header(authorization)
@@ -49,13 +52,14 @@ def view_inventory() -> list[dict[str, str | int]] | dict[str, str]:
 
     items: list[dict[str, str | int]] = []
 
-    for medicine, stock in inventory.items():
-        items.append(
-            {
-                "medicine": medicine,
-                "stock": stock,
-            }
-        )
+    with inventory_lock:
+        for medicine, stock in inventory.items():
+            items.append(
+                {
+                    "medicine": medicine,
+                    "stock": stock,
+                }
+            )
 
     return items
 
@@ -72,15 +76,15 @@ def add_inventory(
     if quantity <= 0:
         return {"error": "Quantity must be greater than zero"}
 
-    current_stock = inventory.get(medicine, 0)
-    new_stock = current_stock + quantity
+    with inventory_lock:
+        current_stock = inventory.get(medicine, 0)
+        new_stock = current_stock + quantity
+        inventory[medicine] = new_stock
 
-    inventory[medicine] = new_stock
-
-    return {
-        "medicine": medicine,
-        "stock": new_stock,
-    }
+        return {
+            "medicine": medicine,
+            "stock": new_stock,
+        }
 
 
 @mcp.custom_route("/health", methods=["GET"])

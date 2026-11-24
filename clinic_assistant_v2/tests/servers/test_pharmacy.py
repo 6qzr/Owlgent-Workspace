@@ -8,7 +8,7 @@ import pytest
 from servers.pharmacy import server
 from servers.pharmacy.tokens import create_token
 
-TEST_SECRET = "fake-test-secret-only"
+TEST_SECRET = "unit-test-secret-not-for-production"
 
 
 @pytest.fixture(autouse=True)
