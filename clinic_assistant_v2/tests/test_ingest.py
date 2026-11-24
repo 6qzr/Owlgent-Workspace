@@ -61,6 +61,7 @@ def test_fake_embedder() -> None:
     fake.embeddings.create.assert_called_once_with(
         model="text-embedding-3-small",
         input=["first", "second"],
+        timeout=ingest.REQUEST_TIMEOUT_SECONDS,
     )
 
 
