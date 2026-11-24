@@ -2,13 +2,12 @@
 
 import logging
 import secrets
-from typing import Annotated
 
-import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 
-from api.config import STATE_COOKIE_MAX_AGE_SECONDS, STATE_COOKIE_NAME, USER_SCOPES, Settings
+from api.config import STATE_COOKIE_MAX_AGE_SECONDS, STATE_COOKIE_NAME, USER_SCOPES
+from api.dependencies import HttpClientDep, SettingsDep
 from api.google_oauth import (
     GoogleAuthError,
     build_login_url,
@@ -20,22 +19,6 @@ from api.tokens import create_token
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-
-
-def get_settings(request: Request) -> Settings:
-    """Return the settings loaded when the app was created."""
-    settings: Settings = request.app.state.settings
-    return settings
-
-
-def get_http_client(request: Request) -> httpx.AsyncClient:
-    """Return the shared HTTP client used to call Google."""
-    client: httpx.AsyncClient = request.app.state.http_client
-    return client
-
-
-SettingsDep = Annotated[Settings, Depends(get_settings)]
-HttpClientDep = Annotated[httpx.AsyncClient, Depends(get_http_client)]
 
 
 @router.get("/login")
