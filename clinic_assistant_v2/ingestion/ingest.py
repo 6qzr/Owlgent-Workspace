@@ -13,6 +13,7 @@ from qdrant_client import QdrantClient, models
 CHUNK_SIZE = 500
 CHUNK_OVERLAP = 100
 VECTOR_SIZE = 1536
+REQUEST_TIMEOUT_SECONDS = 30
 
 PDF_DIR = Path(__file__).parent / "pdfs"
 
@@ -68,9 +69,16 @@ def embed_texts(
     response = client.embeddings.create(
         model=model,
         input=chunks,
+        timeout=REQUEST_TIMEOUT_SECONDS,
     )
 
-    return [item.embedding for item in sorted(response.data, key=lambda item: item.index)]
+    return [
+        item.embedding
+        for item in sorted(
+            response.data,
+            key=lambda item: item.index,
+        )
+    ]
 
 
 def ensure_collection(
@@ -118,6 +126,8 @@ def store_chunks(
             )
         )
 
+    # If a PDF becomes shorter, old higher-index points remain in Qdrant.
+    # This is acceptable for v2 because the source PDFs are fixed.
     if points:
         client.upsert(
             collection_name=collection,
@@ -172,19 +182,31 @@ def main() -> None:
         "EMBEDDING_MODEL",
         DEFAULT_EMBEDDING_MODEL,
     )
+
     collection = os.environ.get(
         "QDRANT_COLLECTION",
         DEFAULT_COLLECTION,
     )
+
     qdrant_url = os.environ.get(
         "QDRANT_URL",
         DEFAULT_QDRANT_URL,
     )
 
-    openai_client = OpenAI(api_key=api_key)
-    qdrant_client = QdrantClient(url=qdrant_url)
+    openai_client = OpenAI(
+        api_key=api_key,
+        timeout=REQUEST_TIMEOUT_SECONDS,
+        max_retries=0,
+    )
 
-    def make_embeddings(chunks: list[str]) -> list[list[float]]:
+    qdrant_client = QdrantClient(
+        url=qdrant_url,
+        timeout=REQUEST_TIMEOUT_SECONDS,
+    )
+
+    def make_embeddings(
+        chunks: list[str],
+    ) -> list[list[float]]:
         """Create embeddings using the configured OpenAI embedding model."""
         return embed_texts(
             chunks,
