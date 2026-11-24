@@ -124,6 +124,31 @@ def test_missing_jwt_secret_fails_fast(monkeypatch: pytest.MonkeyPatch) -> None:
         create_token("user-a", "a@example.com", [])
 
 
+def test_placeholder_jwt_secret_fails_fast(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The .env.example placeholder is public, so it is refused instead of signing with it."""
+    monkeypatch.setenv("JWT_SECRET", "change-me")
+
+    with pytest.raises(RuntimeError, match="placeholder"):
+        create_token("user-a", "a@example.com", [])
+
+
+def test_short_jwt_secret_fails_fast(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A secret under 32 bytes is refused, so a weak key cannot verify or forge tokens."""
+    monkeypatch.setenv("JWT_SECRET", "x" * 31)
+
+    with pytest.raises(RuntimeError, match="at least 32 bytes"):
+        verify_token("any.token.value", "records:read")
+
+
+def test_32_byte_jwt_secret_is_accepted(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Exactly 32 bytes is the minimum that works."""
+    monkeypatch.setenv("JWT_SECRET", "x" * 32)
+
+    token = create_token("user-a", "a@example.com", ["records:read"])
+
+    assert verify_token(token, "records:read")["sub"] == "user-a"
+
+
 @pytest.mark.parametrize(
     ("header", "expected"),
     [

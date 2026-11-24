@@ -10,6 +10,10 @@ ALGORITHM = "HS256"
 DEFAULT_TOKEN_TTL_SECONDS = 3600
 REQUIRED_CLAIMS = ["sub", "email", "scopes", "exp"]
 BEARER_PREFIX = "Bearer "
+# RFC 7518 section 3.2: an HS256 key must be at least as long as the hash output (32 bytes).
+MIN_SECRET_BYTES = 32
+# Not a real secret: the public .env.example value, kept here only so it can be refused.
+PLACEHOLDER_SECRET = "change-me"  # noqa: S105
 
 
 class Unauthorized(Exception):
@@ -17,10 +21,14 @@ class Unauthorized(Exception):
 
 
 def get_jwt_secret() -> str:
-    """Return JWT_SECRET from the environment; fail fast with a clear message when it is unset."""
+    """Return JWT_SECRET; fail fast if it is unset, the placeholder or too short."""
     secret = os.environ.get("JWT_SECRET", "")
     if not secret:
         raise RuntimeError("JWT_SECRET is not set. Copy .env.example to .env and set it.")
+    if secret == PLACEHOLDER_SECRET:
+        raise RuntimeError("JWT_SECRET is still the .env.example placeholder. Set a real secret.")
+    if len(secret.encode("utf-8")) < MIN_SECRET_BYTES:
+        raise RuntimeError(f"JWT_SECRET must be at least {MIN_SECRET_BYTES} bytes long.")
     return secret
 
 
