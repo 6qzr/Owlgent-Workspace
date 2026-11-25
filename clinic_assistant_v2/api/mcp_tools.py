@@ -70,4 +70,8 @@ class McpToolbox:
             return UNAVAILABLE_RESULT
 
         text = "\n".join(block.text for block in result.content if isinstance(block, TextContent))
+        if not text:
+            # An empty list comes back with no text at all, only as structured content
+            # ({"result": []}); show the model "[]" so it knows the search found nothing.
+            text = json.dumps(result.data if result.data is not None else result.structured_content)
         return text[:MAX_TOOL_RESULT_CHARS]
